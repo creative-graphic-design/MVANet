@@ -55,7 +55,7 @@ def patches2image(x):
     return x
 
 
-class PositionEmbeddingSine:
+class PositionEmbeddingSine(nn.Module):
     def __init__(
         self, num_pos_feats=64, temperature=10000, normalize=False, scale=None
     ):
@@ -69,19 +69,26 @@ class PositionEmbeddingSine:
             scale = 2 * math.pi
         self.scale = scale
         self.dim_t = torch.arange(
-            0, self.num_pos_feats, dtype=torch.float32, device="cuda"
+            0,
+            self.num_pos_feats,
+            dtype=torch.float32,
+            device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         )
 
     def __call__(self, b, h, w):
-        mask = torch.zeros([b, h, w], dtype=torch.bool, device="cuda")
+        mask = torch.zeros([b, h, w], dtype=torch.bool, device=self.dim_t.device)
         assert mask is not None
         not_mask = ~mask
         y_embed = not_mask.cumsum(dim=1, dtype=torch.float32)
         x_embed = not_mask.cumsum(dim=2, dtype=torch.float32)
         if self.normalize:
             eps = 1e-6
-            y_embed = ((y_embed - 0.5) / (y_embed[:, -1:, :] + eps) * self.scale).cuda()
-            x_embed = ((x_embed - 0.5) / (x_embed[:, :, -1:] + eps) * self.scale).cuda()
+            y_embed = ((y_embed - 0.5) / (y_embed[:, -1:, :] + eps) * self.scale).to(
+                mask.device
+            )
+            x_embed = ((x_embed - 0.5) / (x_embed[:, :, -1:] + eps) * self.scale).to(
+                mask.device
+            )
 
         dim_t = self.temperature ** (2 * (self.dim_t // 2) / self.num_pos_feats)
 
