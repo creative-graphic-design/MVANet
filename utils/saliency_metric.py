@@ -10,7 +10,7 @@ class cal_fm(object):
         self.thds = thds
         self.precision = np.zeros((self.num, self.thds))
         self.recall = np.zeros((self.num, self.thds))
-        self.meanF = np.zeros((self.num,1))
+        self.meanF = np.zeros((self.num, 1))
         self.idx = 0
 
     def update(self, pred, gt):
@@ -22,7 +22,7 @@ class cal_fm(object):
         self.idx += 1
 
     def cal(self, pred, gt):
-########################meanF##############################
+        ########################meanF##############################
         th = 2 * pred.mean()
         if th > 1:
             th = 1
@@ -37,7 +37,7 @@ class cal_fm(object):
             pre = tp / binary.sum()
             rec = tp / hard_gt.sum()
             meanF = 1.3 * pre * rec / (0.3 * pre + rec)
-########################maxF##############################
+        ########################maxF##############################
         pred = np.uint8(pred * 255)
         target = pred[gt > 0.5]
         nontarget = pred[gt <= 0.5]
@@ -55,7 +55,7 @@ class cal_fm(object):
         recall = self.recall.mean(axis=0)
         fmeasure = 1.3 * precision * recall / (0.3 * precision + recall + 1e-8)
         fmeasure_avg = self.meanF.mean(axis=0)
-        return fmeasure.max(),fmeasure_avg[0],precision,recall
+        return fmeasure.max(), fmeasure_avg[0], precision, recall
 
 
 class cal_mae(object):
@@ -73,6 +73,7 @@ class cal_mae(object):
     def show(self):
         return np.mean(self.prediction)
 
+
 class cal_dice(object):
     # mean absolute error
     def __init__(self):
@@ -88,10 +89,13 @@ class cal_dice(object):
         y_true_f = y_true.flatten()
         y_pred_f = y_pred.flatten()
         intersection = np.sum(y_true_f * y_pred_f)
-        return (2. * intersection + smooth) / (np.sum(y_true_f) + np.sum(y_pred_f) + smooth)
+        return (2.0 * intersection + smooth) / (
+            np.sum(y_true_f) + np.sum(y_pred_f) + smooth
+        )
 
     def show(self):
         return np.mean(self.prediction)
+
 
 class cal_ber(object):
     # mean absolute error
@@ -108,14 +112,15 @@ class cal_ber(object):
         hard_gt = np.zeros_like(y_true)
         hard_gt[y_true > 0.5] = 1
         tp = (binary * hard_gt).sum()
-        tn = ((1-binary) * (1-hard_gt)).sum()
+        tn = ((1 - binary) * (1 - hard_gt)).sum()
         Np = hard_gt.sum()
-        Nn = (1-hard_gt).sum()
-        ber = (1-(tp/(Np+1e-8)+tn/(Nn+1e-8))/2)
+        Nn = (1 - hard_gt).sum()
+        ber = 1 - (tp / (Np + 1e-8) + tn / (Nn + 1e-8)) / 2
         return ber
 
     def show(self):
         return np.mean(self.prediction)
+
 
 class cal_acc(object):
     # mean absolute error
@@ -132,14 +137,15 @@ class cal_acc(object):
         hard_gt = np.zeros_like(y_true)
         hard_gt[y_true > 0.5] = 1
         tp = (binary * hard_gt).sum()
-        tn = ((1-binary) * (1-hard_gt)).sum()
+        tn = ((1 - binary) * (1 - hard_gt)).sum()
         Np = hard_gt.sum()
-        Nn = (1-hard_gt).sum()
-        acc = ((tp+tn)/(Np+Nn))
+        Nn = (1 - hard_gt).sum()
+        acc = (tp + tn) / (Np + Nn)
         return acc
 
     def show(self):
         return np.mean(self.prediction)
+
 
 class cal_iou(object):
     # mean absolute error
@@ -165,6 +171,7 @@ class cal_iou(object):
         union = (input | target_).sum()
 
         return (intersection + smooth) / (union + smooth)
+
     def show(self):
         return np.mean(self.prediction)
 
@@ -180,6 +187,7 @@ class cal_iou(object):
     # union = (output_ | target_).sum()
 
     # return (intersection + smooth) / (union + smooth)
+
 
 class cal_sm(object):
     # Structure-measure: A new way to evaluate foreground maps (ICCV 2017)
@@ -202,7 +210,9 @@ class cal_sm(object):
         elif y == 1:
             score = np.mean(pred)
         else:
-            score = self.alpha * self.object(pred, gt) + (1 - self.alpha) * self.region(pred, gt)
+            score = self.alpha * self.object(pred, gt) + (1 - self.alpha) * self.region(
+                pred, gt
+            )
         return score
 
     def object(self, pred, gt):
@@ -210,7 +220,9 @@ class cal_sm(object):
         bg = (1 - pred) * (1 - gt)
 
         u = np.mean(gt)
-        return u * self.s_object(fg, gt) + (1 - u) * self.s_object(bg, np.logical_not(gt))
+        return u * self.s_object(fg, gt) + (1 - u) * self.s_object(
+            bg, np.logical_not(gt)
+        )
 
     def s_object(self, in1, in2):
         x = np.mean(in1[in2])
@@ -278,8 +290,9 @@ class cal_sm(object):
 
         return score
 
+
 class cal_em(object):
-    #Enhanced-alignment Measure for Binary Foreground Map Evaluation (IJCAI 2018)
+    # Enhanced-alignment Measure for Binary Foreground Map Evaluation (IJCAI 2018)
     def __init__(self):
         self.prediction = []
 
@@ -293,32 +306,41 @@ class cal_em(object):
             th = 1
         FM = np.zeros(gt.shape)
         FM[pred >= th] = 1
-        FM = np.array(FM,dtype=bool)
-        GT = np.array(gt,dtype=bool)
+        FM = np.array(FM, dtype=bool)
+        GT = np.array(gt, dtype=bool)
         dFM = np.double(FM)
-        if (sum(sum(np.double(GT)))==0):
-            enhanced_matrix = 1.0-dFM
-        elif (sum(sum(np.double(~GT)))==0):
+        if sum(sum(np.double(GT))) == 0:
+            enhanced_matrix = 1.0 - dFM
+        elif sum(sum(np.double(~GT))) == 0:
             enhanced_matrix = dFM
         else:
             dGT = np.double(GT)
             align_matrix = self.AlignmentTerm(dFM, dGT)
             enhanced_matrix = self.EnhancedAlignmentTerm(align_matrix)
         [w, h] = np.shape(GT)
-        score = sum(sum(enhanced_matrix))/ (w * h - 1 + 1e-8)
+        score = sum(sum(enhanced_matrix)) / (w * h - 1 + 1e-8)
         return score
-    def AlignmentTerm(self,dFM,dGT):
+
+    def AlignmentTerm(self, dFM, dGT):
         mu_FM = np.mean(dFM)
         mu_GT = np.mean(dGT)
         align_FM = dFM - mu_FM
         align_GT = dGT - mu_GT
-        align_Matrix = 2. * (align_GT * align_FM)/ (align_GT* align_GT + align_FM* align_FM + 1e-8)
+        align_Matrix = (
+            2.0
+            * (align_GT * align_FM)
+            / (align_GT * align_GT + align_FM * align_FM + 1e-8)
+        )
         return align_Matrix
-    def EnhancedAlignmentTerm(self,align_Matrix):
-        enhanced = np.power(align_Matrix + 1,2) / 4
+
+    def EnhancedAlignmentTerm(self, align_Matrix):
+        enhanced = np.power(align_Matrix + 1, 2) / 4
         return enhanced
+
     def show(self):
         return np.mean(self.prediction)
+
+
 class cal_wfm(object):
     def __init__(self, beta=1):
         self.beta = beta
@@ -342,9 +364,9 @@ class cal_wfm(object):
         2D gaussian mask - should give the same result as MATLAB's
         fspecial('gaussian',[shape],[sigma])
         """
-        m, n = [(ss - 1.) / 2. for ss in shape]
-        y, x = np.ogrid[-m:m + 1, -n:n + 1]
-        h = np.exp(-(x * x + y * y) / (2. * sigma * sigma))
+        m, n = [(ss - 1.0) / 2.0 for ss in shape]
+        y, x = np.ogrid[-m : m + 1, -n : n + 1]
+        h = np.exp(-(x * x + y * y) / (2.0 * sigma * sigma))
         h[h < np.finfo(h.dtype).eps * h.max()] = 0
         sumh = h.sum()
         if sumh != 0:
@@ -367,7 +389,7 @@ class cal_wfm(object):
         # EA = imfilter(Et,K);
         # MIN_E_EA(GT & EA<E) = EA(GT & EA<E);
         K = self.matlab_style_gauss2D((7, 7), sigma=5)
-        EA = convolve(Et, weights=K, mode='constant', cval=0)
+        EA = convolve(Et, weights=K, mode="constant", cval=0)
         MIN_E_EA = np.where(gt & (EA < E), EA, E)
 
         # %Pixel importance
