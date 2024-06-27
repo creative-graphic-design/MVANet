@@ -1,4 +1,11 @@
 # MVANet
+
+[![CI](https://github.com/creative-graphic-design/MVANet/actions/workflows/ci.yaml/badge.svg)](https://github.com/creative-graphic-design/MVANet/actions/workflows/ci.yaml)
+
+This is a fork of the original [MVANet](https://github.com/qianyu-dlut/MVANet), with bug fixes and packaging improvements.
+
+---
+
 The official repo of the CVPR 2024 paper (Highlight), [Multi-view Aggregation Network for Dichotomous Image Segmentation](https://arxiv.org/abs/2404.07445)
 
  	
