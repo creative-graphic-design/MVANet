@@ -6,12 +6,14 @@ from PIL import Image
 from torch.autograd import Variable
 from torchvision import transforms
 
-from model.MVANet import inf_MVANet
-from utils.config import diste1, diste2, diste3, diste4, disvd
-from utils.misc import check_mkdir
+from mvanet.model import inf_MVANet
+from mvanet.utils.config import diste1
+from mvanet.utils.misc import check_mkdir
+
+# from mvanet.utils.config import diste1, diste2, diste3, diste4, disvd
 
 torch.cuda.set_device(0)
-ckpt_path = "/home/vanessa/code/HRSOD/MVANet-main/saved_model/MVANet/"
+ckpt_path = "ckpt_dir"
 args = {"crf_refine": True, "save_results": True}
 
 
@@ -26,7 +28,8 @@ depth_transform = transforms.ToTensor()
 target_transform = transforms.ToTensor()
 to_pil = transforms.ToPILImage()
 
-to_test = {"te1": diste1, "te2": diste2, "te3": diste3, "te4": diste4, "vd": disvd}
+# to_test = {"te1": diste1, "te2": diste2, "te3": diste3, "te4": diste4, "vd": disvd}
+to_test = {"te1": diste1}
 
 transforms = tta.Compose(
     [

@@ -4,6 +4,12 @@
 
 This is a fork of the original [MVANet](https://github.com/qianyu-dlut/MVANet), with bug fixes and packaging improvements.
 
+## Installation
+
+```shell
+pip install git+https://github.com/creative-graphic-design/MVANet
+```
+
 ---
 
 The official repo of the CVPR 2024 paper (Highlight), [Multi-view Aggregation Network for Dichotomous Image Segmentation](https://arxiv.org/abs/2404.07445)

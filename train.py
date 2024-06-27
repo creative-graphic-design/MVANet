@@ -11,9 +11,9 @@ from torch.cuda import amp
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
-from model.MVANet import MVANet
-from utils.dataset_strategy_fpn import get_loader
-from utils.misc import AvgMeter, adjust_lr
+from mvanet.model import MVANet
+from mvanet.utils.dataset_strategy_fpn import get_loader
+from mvanet.utils.misc import AvgMeter, adjust_lr
 
 writer = SummaryWriter()
 
