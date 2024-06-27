@@ -1,13 +1,16 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Literal, Optional
 
 import torch
 import ttach as tta
 from huggingface_hub import hf_hub_download
+from PIL import Image
 from PIL.Image import Image as PilImage
 from torchvision import transforms
 
 from mvanet.model import inf_MVANet
+
+OutputType = Literal["rgba", "map"]
 
 
 @dataclass
@@ -23,6 +26,9 @@ class MVANetPredictor(object):
     depth_transform: transforms.ToTensor = transforms.ToTensor()
     target_transform: transforms.ToTensor = transforms.ToTensor()
 
+    repo_id: str = "creative-graphic-design/MVANet-checkpoints"
+    device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     def __post_init__(self) -> None:
         if self._net is None:
             self._net = self.load_net()
@@ -31,7 +37,7 @@ class MVANetPredictor(object):
         if self._tta_transforms is None:
             self._tta_transforms = self.load_tta_transforms()
 
-    @print
+    @property
     def net(self) -> inf_MVANet:
         assert self._net is not None
         return self._net
@@ -49,13 +55,10 @@ class MVANetPredictor(object):
     def load_net(
         self,
         mvanet_ckpt_path: str = "Model_80.pth",
-        mvanet_swin_path: str = "swin_base_patch4_window12_384_22kto1k.pth",
     ) -> inf_MVANet:
         net = inf_MVANet()
 
-        ckpt_path = hf_hub_download(
-            "creative-graphic-design/MVANet", filename=mvanet_ckpt_path
-        )
+        ckpt_path = hf_hub_download(self.repo_id, filename=mvanet_ckpt_path)
         pretrained_dict = torch.load(ckpt_path, map_location="cpu")
 
         model_dict = net.state_dict()
@@ -64,8 +67,7 @@ class MVANetPredictor(object):
         net.load_state_dict(model_dict, strict=True)
         net.eval()
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        net = net.to(device)
+        net = net.to(self.device)
 
         assert net.training is False
         return net
@@ -89,3 +91,42 @@ class MVANetPredictor(object):
                 ),
             ]
         )
+
+    def to_rgba(self, image: PilImage, mask: PilImage) -> PilImage:
+        rgba_image = image.copy()
+        rgba_image.putalpha(mask)
+        return rgba_image
+
+    @torch.inference_mode()
+    def __call__(self, image: PilImage, output_type: OutputType = "rgba") -> PilImage:
+        image = image.convert("RGB") if image.mode != "RGB" else image
+        original_w, original_h = image.size
+
+        resized_image = image.resize([1024, 1024], Image.BILINEAR)
+
+        transformed_image = self.image_transform(resized_image)
+        assert isinstance(transformed_image, torch.Tensor)
+
+        transformed_image = transformed_image.unsqueeze(0)
+        transformed_image = transformed_image.to(self.device)
+
+        mask = []
+        for tta_transform in self.tta_transforms:
+            rgb_trans = tta_transform.augment_image(transformed_image)
+            model_output = self.net(rgb_trans)
+            deaug_mask = tta_transform.deaugment_mask(model_output)
+            mask.append(deaug_mask)
+
+        predicted_mask_th = torch.mean(torch.stack(mask, dim=0), dim=0)
+        predicted_mask_th = predicted_mask_th.sigmoid()
+        predicted_mask_pl = self.to_pil(predicted_mask_th.squeeze(0).cpu())
+        predicted_mask_pl = predicted_mask_pl.resize(
+            (original_w, original_h), Image.BILINEAR
+        )
+
+        if output_type == "rgba":
+            return self.to_rgba(image, predicted_mask_pl)
+        elif output_type == "map":
+            return predicted_mask_pl
+        else:
+            raise ValueError(f"Invalid output_type: {output_type}")

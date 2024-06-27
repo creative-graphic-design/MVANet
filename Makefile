@@ -14,3 +14,7 @@ lint:
 .PHONY: typecheck
 typecheck:
 	poetry run mypy .
+
+.PHONY: test
+test:
+	poetry run pytest

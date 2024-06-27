@@ -38,3 +38,7 @@ jobs:
       - name: Type check
         run: |
           make typecheck
+
+      - name: Test
+        run: |
+          make test
