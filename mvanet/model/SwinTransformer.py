@@ -4,12 +4,12 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ze Liu, Yutong Lin, Yixuan Wei
 # --------------------------------------------------------
-
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
+from huggingface_hub import hf_hub_download
 from mmdet.utils import get_root_logger
 from timm.models import load_checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
@@ -776,12 +776,12 @@ def SwinB(pretrained=True):
         embed_dim=128, depths=[2, 2, 18, 2], num_heads=[4, 8, 16, 32], window_size=12
     )
     if pretrained is True:
-        model.load_state_dict(
-            torch.load(
-                "./swin_base_patch4_window12_384_22kto1k.pth", map_location="cpu"
-            )["model"],
-            strict=False,
+        state_dict_path = hf_hub_download(
+            repo_id="creative-graphic-design/MVANet-checkpoints",
+            filename="swin_base_patch4_window12_384_22kto1k.pth",
         )
+        state_dict = torch.load(state_dict_path, map_location="cpu")
+        model.load_state_dict(state_dict["model"], strict=False)
 
     return model
 
