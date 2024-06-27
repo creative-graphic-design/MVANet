@@ -19,6 +19,11 @@ ruff = ">=0.1.5"
 mypy = ">=1.0.0"
 pytest = ">=6.0.0"
 
+[tool.ruff.lint]
+ignore = [
+    "E741", # ambiguous variable name
+]
+
 [tool.mypy]
 python_version = "3.10"
 no_strict_optional = true
