@@ -10,6 +10,25 @@ This is a fork of the original [MVANet](https://github.com/qianyu-dlut/MVANet), 
 pip install git+https://github.com/creative-graphic-design/MVANet
 ```
 
+## Usage
+
+```python
+from PIL import Image
+from mvanet.predictor import MVANetPredictor
+
+test_image = Image.open("/path/to/image.png")
+
+predictor = MVANetPredictor()
+
+# Predict the RGBA image
+predicted_image = predictor(test_image, output_type="rgba")
+predicted_image.save("rgba.py")
+
+# Predict the mask image
+predicted_mask = predictor(test_image, output_type="mask")
+predicted_mask.save("mask.png")
+```
+
 ---
 
 The official repo of the CVPR 2024 paper (Highlight), [Multi-view Aggregation Network for Dichotomous Image Segmentation](https://arxiv.org/abs/2404.07445)
