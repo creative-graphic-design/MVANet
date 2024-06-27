@@ -1,7 +1,8 @@
 # coding: utf-8
 import os
 
-diste1 = "/home/vanessa/code/DIS-main/DIS5K/DIS-TE1/"
+# diste1 = "/home/vanessa/code/DIS-main/DIS5K/DIS-TE1/"
+diste1 = "./"
 diste2 = "/home/vanessa/code/DIS-main/DIS5K/DIS-TE2/"
 diste3 = "/home/vanessa/code/DIS-main/DIS5K/DIS-TE3/"
 diste4 = "/home/vanessa/code/DIS-main/DIS5K/DIS-TE4/"
