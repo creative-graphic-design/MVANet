@@ -6,7 +6,7 @@ from PIL import Image
 from torch.autograd import Variable
 from torchvision import transforms
 
-from mvanet.model.MVANet import inf_MVANet
+from mvanet.model import inf_MVANet
 from mvanet.utils.config import diste1, diste2, diste3, diste4, disvd
 from mvanet.utils.misc import check_mkdir
 

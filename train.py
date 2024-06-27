@@ -11,7 +11,7 @@ from torch.cuda import amp
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
-from mvanet.model.MVANet import MVANet
+from mvanet.model import MVANet
 from mvanet.utils.dataset_strategy_fpn import get_loader
 from mvanet.utils.misc import AvgMeter, adjust_lr
 
