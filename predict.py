@@ -7,8 +7,10 @@ from torch.autograd import Variable
 from torchvision import transforms
 
 from mvanet.model import inf_MVANet
-from mvanet.utils.config import diste1, diste2, diste3, diste4, disvd
+from mvanet.utils.config import diste1
 from mvanet.utils.misc import check_mkdir
+
+# from mvanet.utils.config import diste1, diste2, diste3, diste4, disvd
 
 torch.cuda.set_device(0)
 ckpt_path = "ckpt_dir"
