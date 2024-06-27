@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import ndimage
-from scipy.ndimage import convolve, distance_transform_edt as bwdist
+from scipy.ndimage import convolve
+from scipy.ndimage import distance_transform_edt as bwdist
 
 
 class cal_fm(object):

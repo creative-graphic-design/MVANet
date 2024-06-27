@@ -1,14 +1,14 @@
-import numpy as np
 import os
-import time
+
 import torch
+import ttach as tta
 from PIL import Image
 from torch.autograd import Variable
 from torchvision import transforms
+
+from model.MVANet import inf_MVANet
 from utils.config import diste1, diste2, diste3, diste4, disvd
 from utils.misc import check_mkdir
-from model.MVANet import inf_MVANet
-import ttach as tta
 
 torch.cuda.set_device(0)
 ckpt_path = "/home/vanessa/code/HRSOD/MVANet-main/saved_model/MVANet/"

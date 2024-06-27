@@ -1,10 +1,10 @@
 import os
-from PIL import Image
+import random
+
+import numpy as np
 import torch.utils.data as data
 import torchvision.transforms as transforms
-import random
-import numpy as np
-from PIL import ImageEnhance
+from PIL import Image, ImageEnhance
 
 
 # several data augumentation strategies

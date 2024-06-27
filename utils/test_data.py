@@ -1,7 +1,7 @@
 import os
-from PIL import Image
-import torch.utils.data as data
+
 import torchvision.transforms as transforms
+from PIL import Image
 
 
 class test_dataset:

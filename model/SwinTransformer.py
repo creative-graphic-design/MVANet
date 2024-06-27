@@ -5,11 +5,11 @@
 # Written by Ze Liu, Yutong Lin, Yixuan Wei
 # --------------------------------------------------------
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
-import numpy as np
 from mmdet.utils import get_root_logger
 from timm.models import load_checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_

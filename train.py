@@ -1,18 +1,19 @@
-import torch
-import os, argparse
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import argparse
+import os
 from datetime import datetime
-from model.MVANet import MVANet
-from utils.dataset_strategy_fpn import get_loader
-from utils.misc import adjust_lr, AvgMeter
+
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.backends import cudnn
-from torchvision import transforms
-import torch.nn as nn
 from torch.cuda import amp
 from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
+
+from model.MVANet import MVANet
+from utils.dataset_strategy_fpn import get_loader
+from utils.misc import AvgMeter, adjust_lr
 
 writer = SummaryWriter()
 

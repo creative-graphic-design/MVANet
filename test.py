@@ -1,19 +1,21 @@
-import numpy as np
 import os
-from utils.test_data import test_dataset
-from utils.saliency_metric import (
-    cal_mae,
-    cal_fm,
-    cal_sm,
-    cal_em,
-    cal_wfm,
-    cal_dice,
-    cal_iou,
-    cal_ber,
-    cal_acc,
-)
-from utils.config import diste1, diste2, diste3, diste4, disvd
+
+import numpy as np
 from tqdm import tqdm
+
+from utils.config import diste1, diste2, diste3, diste4, disvd
+from utils.saliency_metric import (
+    cal_acc,
+    cal_ber,
+    cal_dice,
+    cal_em,
+    cal_fm,
+    cal_iou,
+    cal_mae,
+    cal_sm,
+    cal_wfm,
+)
+from utils.test_data import test_dataset
 
 test_datasets = {
     "te1": diste1,
