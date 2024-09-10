@@ -25,7 +25,7 @@ predicted_image = predictor(test_image, output_type="rgba")
 predicted_image.save("rgba.png")
 
 # Predict the mask image
-predicted_mask = predictor(test_image, output_type="mask")
+predicted_mask = predictor(test_image, output_type="map")
 predicted_mask.save("mask.png")
 ```
 
