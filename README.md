@@ -1,13 +1,16 @@
 # MVANet
 
 [![CI](https://github.com/creative-graphic-design/MVANet/actions/workflows/ci.yaml/badge.svg)](https://github.com/creative-graphic-design/MVANet/actions/workflows/ci.yaml)
+[![Release](https://github.com/creative-graphic-design/MVANet/actions/workflows/release.yaml/badge.svg)](https://github.com/creative-graphic-design/MVANet/actions/workflows/release.yaml)
+[![Deploy](https://github.com/creative-graphic-design/MVANet/actions/workflows/deploy.yaml/badge.svg)](https://github.com/creative-graphic-design/MVANet/actions/workflows/deploy.yaml)
+[![PyPI](https://img.shields.io/pypi/v/mvanet.svg)](https://pypi.python.org/pypi/mvanet)
 
 This is a fork of the original [MVANet](https://github.com/qianyu-dlut/MVANet), with bug fixes and packaging improvements.
 
 ## Installation
 
 ```shell
-pip install git+https://github.com/creative-graphic-design/MVANet
+pip install mvanet
 ```
 
 ## Usage
