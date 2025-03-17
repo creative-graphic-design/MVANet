@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.2.1](https://github.com/creative-graphic-design/MVANet/compare/v0.2.0...v0.2.1) - 2025-03-17
+- Update deploy by @shunk031 in https://github.com/creative-graphic-design/MVANet/pull/10
+
 ## [v0.2.0](https://github.com/creative-graphic-design/MVANet/compare/v0.1.0...v0.2.0) - 2025-03-17
 - Update README.md by @AMEERAZAM08 in https://github.com/creative-graphic-design/MVANet/pull/6
 - Update README.md by @shunk031 in https://github.com/creative-graphic-design/MVANet/pull/8
