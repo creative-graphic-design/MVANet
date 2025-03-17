@@ -1,6 +1,6 @@
 [project]
 name = "mvanet"
-version = "0.2.0"
+version = "0.2.1"
 description = ""
 authors = [
     { name = "Shunsuke KITADA", email = "shunsuke.kitada.0831@gmail.com" },
