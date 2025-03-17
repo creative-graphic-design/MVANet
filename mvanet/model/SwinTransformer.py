@@ -10,9 +10,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from huggingface_hub import hf_hub_download
-from mmdet.utils import get_root_logger
 from timm.models import load_checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+
+try:
+    from mmdet.utils import get_root_logger
+
+    logger = get_root_logger()
+
+except ImportError:
+    from mmengine.logging import MMLogger
+
+    logger = MMLogger.get_current_instance()
 
 
 class Mlp(nn.Module):
@@ -231,9 +240,9 @@ class SwinTransformerBlock(nn.Module):
         self.window_size = window_size
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
-        assert (
-            0 <= self.shift_size < self.window_size
-        ), "shift_size must in 0-window_size"
+        assert 0 <= self.shift_size < self.window_size, (
+            "shift_size must in 0-window_size"
+        )
 
         self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
@@ -695,7 +704,6 @@ class SwinTransformer(nn.Module):
 
         if isinstance(pretrained, str):
             self.apply(_init_weights)
-            logger = get_root_logger()
             load_checkpoint(self, pretrained, strict=False, logger=logger)
         elif pretrained is None:
             self.apply(_init_weights)
