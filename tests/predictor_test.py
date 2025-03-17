@@ -1,7 +1,6 @@
 import pathlib
 from typing import get_args
 
-import numpy as np
 import pytest
 import torch
 from PIL import Image, ImageChops
@@ -53,14 +52,5 @@ def test_predictor(
     expected_image_path = test_fixtures_dir / f"expected_{output_type}_{device}.png"
     expected_image = Image.open(expected_image_path)
 
-    # assert np.array(predicted_image).sum() == np.array(expected_image).sum()
-
     diff = ImageChops.difference(predicted_image, expected_image)
-
-    # diff_r, diff_g, diff_b, diff_a = diff.split()
-    # assert diff_r.getbbox() is None
-    # assert diff_g.getbbox() is None
-    # assert diff_b.getbbox() is None
-    # assert diff_a.getbbox() is None
-
     assert len(set(diff.getdata())) < threshold, diff.getdata()
