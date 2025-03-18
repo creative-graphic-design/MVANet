@@ -13,16 +13,6 @@ from huggingface_hub import hf_hub_download
 from timm.models import load_checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
-try:
-    from mmdet.utils import get_root_logger
-
-    logger = get_root_logger()
-
-except ImportError:
-    from mmengine.logging import MMLogger
-
-    logger = MMLogger.get_current_instance()
-
 
 class Mlp(nn.Module):
     """Multilayer perceptron."""
@@ -704,7 +694,7 @@ class SwinTransformer(nn.Module):
 
         if isinstance(pretrained, str):
             self.apply(_init_weights)
-            load_checkpoint(self, pretrained, strict=False, logger=logger)
+            load_checkpoint(self, pretrained, strict=False)
         elif pretrained is None:
             self.apply(_init_weights)
         else:
