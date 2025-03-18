@@ -25,11 +25,6 @@ def test_image(test_fixtures_dir: pathlib.Path) -> PilImage:
     return Image.open(image_path)
 
 
-@pytest.fixture
-def device() -> torch.device:
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
 # @pytest.mark.skipif(
 #     not torch.cuda.is_available(),
 #     reason="No GPUs available for testing.",
@@ -53,4 +48,7 @@ def test_predictor(
     expected_image = Image.open(expected_image_path)
 
     diff = ImageChops.difference(predicted_image, expected_image)
-    assert len(set(diff.getdata())) < threshold, diff.getdata()
+    results = set(diff.getdata())
+    print(f"{results=}")
+
+    assert len(results) < threshold, diff.getdata()
