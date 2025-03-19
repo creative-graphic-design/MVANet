@@ -23,6 +23,7 @@ build-backend = "poetry.core.masonry.api"
 ruff = ">=0.1.5"
 mypy = ">=1.0.0"
 pytest = ">=6.0.0"
+torch-tensorrt = { version = ">=2.0.0", markers = "sys_platform == \"linux\"" }
 
 [tool.ruff.lint]
 ignore = [
