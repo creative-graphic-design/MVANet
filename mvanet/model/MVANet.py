@@ -75,7 +75,7 @@ class PositionEmbeddingSine(nn.Module):
             device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
         )
 
-    def __call__(self, b, h, w):
+    def forward(self, b, h, w):
         mask = torch.zeros([b, h, w], dtype=torch.bool, device=self.dim_t.device)
         assert mask is not None
         not_mask = ~mask
@@ -127,8 +127,7 @@ class MCLM(nn.Module):
         self.dropout2 = nn.Dropout(0.1)
         self.activation = get_activation_fn("relu")
         self.pool_ratios = pool_ratios
-        self.p_poses = []
-        self.g_pos = None
+
         self.positional_encoding = PositionEmbeddingSine(
             num_pos_feats=d_model // 2, normalize=True
         )
@@ -140,30 +139,31 @@ class MCLM(nn.Module):
         """
         b, c, h, w = l.size()
         # 4,c,h,w -> 1,c,2h,2w
+        breakpoint()
         concated_locs = rearrange(l, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2)
 
-        pools = []
+        p_poses, pools = [], []
         for pool_ratio in self.pool_ratios:
             # b,c,h,w
             tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
             pool = F.adaptive_avg_pool2d(concated_locs, tgt_hw)
             pools.append(rearrange(pool, "b c h w -> (h w) b c"))
-            if self.g_pos is None:
-                pos_emb = self.positional_encoding(
-                    pool.shape[0], pool.shape[2], pool.shape[3]
-                )
-                pos_emb = rearrange(pos_emb, "b c h w -> (h w) b c")
-                self.p_poses.append(pos_emb)
+
+            pos_emb = self.positional_encoding(
+                pool.shape[0], pool.shape[2], pool.shape[3]
+            )
+            pos_emb = rearrange(pos_emb, "b c h w -> (h w) b c")
+            p_poses.append(pos_emb)
         pools = torch.cat(pools, 0)
-        if self.g_pos is None:
-            self.p_poses = torch.cat(self.p_poses, dim=0)
-            pos_emb = self.positional_encoding(g.shape[0], g.shape[2], g.shape[3])
-            self.g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
+
+        p_poses = torch.cat(p_poses, dim=0)
+        pos_emb = self.positional_encoding(g.shape[0], g.shape[2], g.shape[3])
+        g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
 
         # attention between glb (q) & multisensory concated-locs (k,v)
         g_hw_b_c = rearrange(g, "b c h w -> (h w) b c")
         g_hw_b_c = g_hw_b_c + self.dropout1(
-            self.attention[0](g_hw_b_c + self.g_pos, pools + self.p_poses, pools)[0]
+            self.attention[0](g_hw_b_c + g_pos, pools + p_poses, pools)[0]
         )
         g_hw_b_c = self.norm1(g_hw_b_c)
         g_hw_b_c = g_hw_b_c + self.dropout2(
@@ -219,11 +219,20 @@ class inf_MCLM(nn.Module):
         self.dropout2 = nn.Dropout(0.1)
         self.activation = get_activation_fn("relu")
         self.pool_ratios = pool_ratios
-        self.p_poses = []
-        self.g_pos = None
+
         self.positional_encoding = PositionEmbeddingSine(
             num_pos_feats=d_model // 2, normalize=True
         )
+
+    # def calc_concated_locs(self, l: torch.Tensor) -> torch.Tensor:
+    #     # shape: (hg, wg, b, c, h, w)
+    #     l = l.view(2, 2, -1, l.size(1), l.size(2), l.size(3))
+    #     # shape: (b, c, hg, h, wg, w)
+    #     l = l.permute(2, 3, 0, 4, 1, 5).contiguous()
+    #     # shape: (b, c, hg*h, wg*w)
+    #     l = l.view(-1, l.size(1), l.size(2) * l.size(3), l.size(4) * l.size(5))
+
+    #     return l
 
     def forward(self, l, g):
         """
@@ -231,10 +240,11 @@ class inf_MCLM(nn.Module):
         g: 1,c,h,w
         """
         b, c, h, w = l.size()
+
         # 4,c,h,w -> 1,c,2h,2w
         concated_locs = rearrange(l, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2)
-        self.p_poses = []
-        pools = []
+
+        pools, p_poses = [], []
         for pool_ratio in self.pool_ratios:
             # b,c,h,w
             tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
@@ -245,17 +255,17 @@ class inf_MCLM(nn.Module):
                 pool.shape[0], pool.shape[2], pool.shape[3]
             )
             pos_emb = rearrange(pos_emb, "b c h w -> (h w) b c")
-            self.p_poses.append(pos_emb)
+            p_poses.append(pos_emb)
         pools = torch.cat(pools, 0)
-        # if self.g_pos is None:
-        self.p_poses = torch.cat(self.p_poses, dim=0)
+
+        p_poses = torch.cat(p_poses, dim=0)
         pos_emb = self.positional_encoding(g.shape[0], g.shape[2], g.shape[3])
-        self.g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
+        g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
 
         # attention between glb (q) & multisensory concated-locs (k,v)
         g_hw_b_c = rearrange(g, "b c h w -> (h w) b c")
         g_hw_b_c = g_hw_b_c + self.dropout1(
-            self.attention[0](g_hw_b_c + self.g_pos, pools + self.p_poses, pools)[0]
+            self.attention[0](g_hw_b_c + g_pos, pools + p_poses, pools)[0]
         )
         g_hw_b_c = self.norm1(g_hw_b_c)
         g_hw_b_c = g_hw_b_c + self.dropout2(
