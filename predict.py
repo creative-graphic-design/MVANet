@@ -1,7 +1,5 @@
 import os
-import time
 
-import numpy as np
 import torch
 import ttach as tta
 from PIL import Image
