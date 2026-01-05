@@ -17,4 +17,4 @@ typecheck:
 
 .PHONY: test
 test:
-	poetry run pytest -vs
+	uv run pytest -vs
