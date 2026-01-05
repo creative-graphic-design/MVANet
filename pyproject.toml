@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 authors = [
-    { name = "Shunsuke KITADA", email = "shunsuke.kitada.0831@gmail.com" }
+    { name = "Shunsuke KITADA", email = "shunsuke.kitada.0831@gmail.com" },
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -20,8 +20,9 @@ requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = [
-    "mypy>=1.0.0",
-    "pytest>=6.0.0",
-    "ruff>=0.1.5",
+dev = ["mypy>=1.0.0", "pytest>=6.0.0", "ruff>=0.1.5"]
+
+[tool.ruff.lint]
+ignore = [
+    "E741", # ambiguous variable name
 ]
