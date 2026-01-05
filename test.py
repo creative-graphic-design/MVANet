@@ -1,8 +1,10 @@
 import os
 
 import cv2
+import numpy as np
 from skimage.morphology import skeletonize
 from tqdm import tqdm
+from utils.config import diste1, diste2, diste3, diste4, disvd
 from utils.saliency_metric import (
     HCEMeasure,
     cal_acc,
@@ -15,8 +17,6 @@ from utils.saliency_metric import (
     cal_sm,
     cal_wfm,
 )
-
-from utils.config import diste1, diste2, diste3, diste4, disvd
 from utils.test_data import test_dataset
 
 test_datasets = {
