@@ -160,7 +160,9 @@ class DISDataset(data.Dataset):
         if h < self.trainsize or w < self.trainsize:
             h = max(h, self.trainsize)
             w = max(w, self.trainsize)
-            return img.resize((w, h), Image.BILINEAR), gt.resize((w, h), Image.NEAREST)
+            return img.resize((w, h), Image.Resampling.BILINEAR), gt.resize(
+                (w, h), Image.Resampling.NEAREST
+            )
         else:
             return img, gt
 

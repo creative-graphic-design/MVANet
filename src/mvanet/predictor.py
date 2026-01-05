@@ -112,7 +112,7 @@ class MVANetPredictor(object):
         image = image.convert("RGB") if image.mode != "RGB" else image
         original_w, original_h = image.size
 
-        resized_image = image.resize([1024, 1024], Image.BILINEAR)
+        resized_image = image.resize([1024, 1024], Image.Resampling.BILINEAR)
 
         transformed_image = self.image_transform(resized_image)
         assert isinstance(transformed_image, torch.Tensor)
@@ -131,7 +131,7 @@ class MVANetPredictor(object):
         predicted_mask_th = predicted_mask_th.sigmoid()
         predicted_mask_pl = self.to_pil(predicted_mask_th.squeeze(0).cpu())
         predicted_mask_pl = predicted_mask_pl.resize(
-            (original_w, original_h), Image.BILINEAR
+            (original_w, original_h), Image.Resampling.BILINEAR
         )
 
         if output_type == "rgba":
@@ -156,7 +156,7 @@ class MVANetPredictor(object):
             original_w, original_h = image.size
             original_sizes.append((original_w, original_h))
 
-            resized_image = image.resize([1024, 1024], Image.BILINEAR)
+            resized_image = image.resize([1024, 1024], Image.Resampling.BILINEAR)
             transformed_image = self.image_transform(resized_image)
             processed_images.append(transformed_image)
 
@@ -176,7 +176,7 @@ class MVANetPredictor(object):
         for i, (original_w, original_h) in enumerate(original_sizes):
             predicted_mask_pl = self.to_pil(predicted_masks[i].cpu())
             predicted_mask_pl = predicted_mask_pl.resize(
-                (original_w, original_h), Image.BILINEAR
+                (original_w, original_h), Image.Resampling.BILINEAR
             )
 
             if output_type == "rgba":
