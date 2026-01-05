@@ -20,7 +20,7 @@ requires = ["uv_build>=0.9.17,<0.10.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = ["mypy>=1.0.0", "pytest>=6.0.0", "ruff>=0.1.5"]
+dev = ["mypy>=1.0.0", "pytest>=6.0.0", "ruff>=0.1.5", "scipy-stubs>=1.17.0.0"]
 
 [tool.ruff.lint]
 ignore = [
@@ -28,4 +28,6 @@ ignore = [
 ]
 
 [tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
 exclude = "^tests/"
