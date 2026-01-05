@@ -1,7 +1,10 @@
+import cv2
 import numpy as np
 from scipy import ndimage
 from scipy.ndimage import convolve
 from scipy.ndimage import distance_transform_edt as bwdist
+from skimage.measure import label
+from skimage.morphology import disk, skeletonize
 
 
 class cal_fm(object):
@@ -12,14 +15,17 @@ class cal_fm(object):
         self.precision = np.zeros((self.num, self.thds))
         self.recall = np.zeros((self.num, self.thds))
         self.meanF = np.zeros((self.num, 1))
+        self.changeable_fms = []
         self.idx = 0
 
     def update(self, pred, gt):
         if gt.max() != 0:
-            prediction, recall, Fmeasure_temp = self.cal(pred, gt)
+            # prediction, recall, Fmeasure_temp = self.cal(pred, gt)
+            prediction, recall, Fmeasure_temp, changeable_fms = self.cal(pred, gt)
             self.precision[self.idx, :] = prediction
             self.recall[self.idx, :] = recall
             self.meanF[self.idx, :] = Fmeasure_temp
+            self.changeable_fms.append(changeable_fms)
         self.idx += 1
 
     def cal(self, pred, gt):
@@ -27,8 +33,10 @@ class cal_fm(object):
         th = 2 * pred.mean()
         if th > 1:
             th = 1
+
         binary = np.zeros_like(pred)
         binary[pred >= th] = 1
+
         hard_gt = np.zeros_like(gt)
         hard_gt[gt > 0.5] = 1
         tp = (binary * hard_gt).sum()
@@ -48,15 +56,19 @@ class cal_fm(object):
         nontargetHist = np.cumsum(np.flip(nontargetHist), axis=0)
         precision = targetHist / (targetHist + nontargetHist + 1e-8)
         recall = targetHist / np.sum(gt)
-        return precision, recall, meanF
+        numerator = 1.3 * precision * recall
+        denominator = np.where(numerator == 0, 1, 0.3 * precision + recall)
+        changeable_fms = numerator / denominator
+        return precision, recall, meanF, changeable_fms
 
     def show(self):
         assert self.num == self.idx
         precision = self.precision.mean(axis=0)
         recall = self.recall.mean(axis=0)
-        fmeasure = 1.3 * precision * recall / (0.3 * precision + recall + 1e-8)
+        # fmeasure = 1.3 * precision * recall / (0.3 * precision + recall + 1e-8)
+        changeable_fm = np.mean(np.array(self.changeable_fms), axis=0)
         fmeasure_avg = self.meanF.mean(axis=0)
-        return fmeasure.max(), fmeasure_avg[0], precision, recall
+        return changeable_fm.max(), fmeasure_avg[0], precision, recall
 
 
 class cal_mae(object):
@@ -417,3 +429,160 @@ class cal_wfm(object):
 
     def show(self):
         return np.mean(self.scores_list)
+
+
+class HCEMeasure(object):
+    def __init__(self):
+        self.hces = []
+
+    def step(self, pred: np.ndarray, gt: np.ndarray, gt_ske):
+        # pred, gt = _prepare_data(pred, gt)
+
+        hce = self.cal_hce(pred, gt, gt_ske)
+        self.hces.append(hce)
+
+    def get_results(self) -> dict:
+        hce = np.mean(np.array(self.hces))
+        return dict(hce=hce)
+
+    def cal_hce(
+        self, pred: np.ndarray, gt: np.ndarray, gt_ske: np.ndarray, relax=5, epsilon=2.0
+    ) -> float:
+        # Binarize gt
+        if len(gt.shape) > 2:
+            gt = gt[:, :, 0]
+
+        epsilon_gt = 0.5  # (np.amin(gt)+np.amax(gt))/2.0
+        gt = (gt > epsilon_gt).astype(np.uint8)
+
+        # Binarize pred
+        if len(pred.shape) > 2:
+            pred = pred[:, :, 0]
+        epsilon_pred = 0.5  # (np.amin(pred)+np.amax(pred))/2.0
+        pred = (pred > epsilon_pred).astype(np.uint8)
+
+        Union = np.logical_or(gt, pred)
+        TP = np.logical_and(gt, pred)
+        FP = pred - TP
+        FN = gt - TP
+
+        # relax the Union of gt and pred
+        Union_erode = Union.copy()
+        Union_erode = cv2.erode(Union_erode.astype(np.uint8), disk(1), iterations=relax)
+
+        # --- get the relaxed False Positive regions for computing the human efforts in correcting them ---
+        FP_ = np.logical_and(FP, Union_erode)  # get the relaxed FP
+        for i in range(0, relax):
+            FP_ = cv2.dilate(FP_.astype(np.uint8), disk(1))
+            FP_ = np.logical_and(FP_, 1 - np.logical_or(TP, FN))
+        FP_ = np.logical_and(FP, FP_)
+
+        # --- get the relaxed False Negative regions for computing the human efforts in correcting them ---
+        FN_ = np.logical_and(
+            FN, Union_erode
+        )  # preserve the structural components of FN
+        ## recover the FN, where pixels are not close to the TP borders
+        for i in range(0, relax):
+            FN_ = cv2.dilate(FN_.astype(np.uint8), disk(1))
+            FN_ = np.logical_and(FN_, 1 - np.logical_or(TP, FP))
+        FN_ = np.logical_and(FN, FN_)
+        FN_ = np.logical_or(
+            FN_, np.logical_xor(gt_ske, np.logical_and(TP, gt_ske))
+        )  # preserve the structural components of FN
+
+        ## 2. =============Find exact polygon control points and independent regions==============
+        ## find contours from FP_
+        ctrs_FP, hier_FP = cv2.findContours(
+            FP_.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE
+        )
+        ## find control points and independent regions for human correction
+        bdies_FP, indep_cnt_FP = self.filter_bdy_cond(
+            ctrs_FP, FP_, np.logical_or(TP, FN_)
+        )
+        ## find contours from FN_
+        ctrs_FN, hier_FN = cv2.findContours(
+            FN_.astype(np.uint8), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE
+        )
+        ## find control points and independent regions for human correction
+        bdies_FN, indep_cnt_FN = self.filter_bdy_cond(
+            ctrs_FN, FN_, 1 - np.logical_or(np.logical_or(TP, FP_), FN_)
+        )
+
+        poly_FP, poly_FP_len, poly_FP_point_cnt = self.approximate_RDP(
+            bdies_FP, epsilon=epsilon
+        )
+        poly_FN, poly_FN_len, poly_FN_point_cnt = self.approximate_RDP(
+            bdies_FN, epsilon=epsilon
+        )
+
+        # FP_points+FP_indep+FN_points+FN_indep
+        return poly_FP_point_cnt + indep_cnt_FP + poly_FN_point_cnt + indep_cnt_FN
+
+    def filter_bdy_cond(self, bdy_, mask, cond):
+        cond = cv2.dilate(cond.astype(np.uint8), disk(1))
+        labels = label(mask)  # find the connected regions
+        lbls = np.unique(labels)  # the indices of the connected regions
+        indep = np.ones(lbls.shape[0])  # the label of each connected regions
+        indep[0] = 0  # 0 indicate the background region
+
+        boundaries = []
+        h, w = cond.shape[0:2]
+        ind_map = np.zeros((h, w))
+        indep_cnt = 0
+
+        for i in range(0, len(bdy_)):
+            tmp_bdies = []
+            tmp_bdy = []
+            for j in range(0, bdy_[i].shape[0]):
+                r, c = bdy_[i][j, 0, 1], bdy_[i][j, 0, 0]
+
+                if np.sum(cond[r, c]) == 0 or ind_map[r, c] != 0:
+                    if len(tmp_bdy) > 0:
+                        tmp_bdies.append(tmp_bdy)
+                        tmp_bdy = []
+                    continue
+                tmp_bdy.append([c, r])
+                ind_map[r, c] = ind_map[r, c] + 1
+                indep[labels[r, c]] = (
+                    0  # indicates part of the boundary of this region needs human correction
+                )
+            if len(tmp_bdy) > 0:
+                tmp_bdies.append(tmp_bdy)
+
+            # check if the first and the last boundaries are connected
+            # if yes, invert the first boundary and attach it after the last boundary
+            if len(tmp_bdies) > 1:
+                first_x, first_y = tmp_bdies[0][0]
+                last_x, last_y = tmp_bdies[-1][-1]
+                if (
+                    (abs(first_x - last_x) == 1 and first_y == last_y)
+                    or (first_x == last_x and abs(first_y - last_y) == 1)
+                    or (abs(first_x - last_x) == 1 and abs(first_y - last_y) == 1)
+                ):
+                    tmp_bdies[-1].extend(tmp_bdies[0][::-1])
+                    del tmp_bdies[0]
+
+            for k in range(0, len(tmp_bdies)):
+                tmp_bdies[k] = np.array(tmp_bdies[k])[:, np.newaxis, :]
+            if len(tmp_bdies) > 0:
+                boundaries.extend(tmp_bdies)
+
+        return boundaries, np.sum(indep)
+
+    # this function approximate each boundary by DP algorithm
+    # https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm
+    def approximate_RDP(self, boundaries, epsilon=1.0):
+        boundaries_ = []
+        boundaries_len_ = []
+        pixel_cnt_ = 0
+
+        # polygon approximate of each boundary
+        for i in range(0, len(boundaries)):
+            boundaries_.append(cv2.approxPolyDP(boundaries[i], epsilon, False))
+
+        # count the control points number of each boundary and the total control points number of all the boundaries
+        for i in range(0, len(boundaries_)):
+            boundaries_len_.append(len(boundaries_[i]))
+            pixel_cnt_ = pixel_cnt_ + len(boundaries_[i])
+
+        return boundaries_, boundaries_len_, pixel_cnt_

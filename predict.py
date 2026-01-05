@@ -13,8 +13,8 @@ from mvanet.utils.misc import check_mkdir
 # from mvanet.utils.config import diste1, diste2, diste3, diste4, disvd
 
 torch.cuda.set_device(0)
-ckpt_path = "ckpt_dir"
-args = {"crf_refine": True, "save_results": True}
+ckpt_path = "./saved_model/"
+args = {"save_results": True}
 
 
 img_transform = transforms.Compose(
@@ -28,14 +28,19 @@ depth_transform = transforms.ToTensor()
 target_transform = transforms.ToTensor()
 to_pil = transforms.ToPILImage()
 
-# to_test = {"te1": diste1, "te2": diste2, "te3": diste3, "te4": diste4, "vd": disvd}
-to_test = {"te1": diste1}
+to_test = {
+    "DIS-TE1": diste1,
+    "DIS-TE2": diste2,
+    "DIS-TE3": diste3,
+    "DIS-TE4": diste4,
+    "DIS-VD": disvd,
+}
 
 transforms = tta.Compose(
     [
         tta.HorizontalFlip(),
         tta.Scale(
-            scales=[0.75, 1, 1.25], interpolation="bilinear", align_corners=False
+            scales=[0.75, 1, 1.125], interpolation="bilinear", align_corners=False
         ),
     ]
 )
@@ -90,5 +95,6 @@ if __name__ == "__main__":
     files = os.listdir(ckpt_path)
     files.sort()
     for items in files:
-        item = items.split(".")[0]
-        main(item)
+        if "80.pth" in items:
+            item = items.split(".")[0]
+            main(item)

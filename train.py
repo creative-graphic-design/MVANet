@@ -28,7 +28,7 @@ parser.add_argument(
     "--decay_rate", type=float, default=0.9, help="decay rate of learning rate"
 )
 parser.add_argument(
-    "--decay_epoch", type=int, default=80, help="every n epochs decay learning rate"
+    "--decay_epoch", type=int, default=60, help="every n epochs decay learning rate"
 )
 
 opt = parser.parse_args()
