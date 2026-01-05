@@ -73,11 +73,6 @@ class TestSingleImagePrediction:
 class TestBatchPrediction:
     """Tests for batch image prediction."""
 
-    @pytest.mark.skip(
-        reason="MVANet model architecture expects batch_size=5 (4 local patches + 1 global). "
-        "Batch prediction with multiple images causes dimension mismatch in decoder blocks. "
-        "See src/mvanet/model/MVANet.py:392 for hardcoded split [4, 1]."
-    )
     def test_batch_predict_rgba(
         self, predictor: MVANetPredictor, sample_images_batch: list[Image.Image]
     ) -> None:
@@ -92,11 +87,6 @@ class TestBatchPrediction:
             assert result.mode == "RGBA"
             assert result.size == original.size
 
-    @pytest.mark.skip(
-        reason="MVANet model architecture expects batch_size=5 (4 local patches + 1 global). "
-        "Batch prediction with multiple images causes dimension mismatch in decoder blocks. "
-        "See src/mvanet/model/MVANet.py:392 for hardcoded split [4, 1]."
-    )
     def test_batch_predict_map(
         self, predictor: MVANetPredictor, sample_images_batch: list[Image.Image]
     ) -> None:
