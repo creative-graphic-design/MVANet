@@ -26,3 +26,6 @@ dev = ["mypy>=1.0.0", "pytest>=6.0.0", "ruff>=0.1.5"]
 ignore = [
     "E741", # ambiguous variable name
 ]
+
+[tool.mypy]
+exclude = "^tests/"
