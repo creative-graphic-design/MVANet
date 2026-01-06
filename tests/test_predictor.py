@@ -34,6 +34,10 @@ class TestPredictorInitialization:
 class TestSingleImagePrediction:
     """Tests for single image prediction."""
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_single_predict_rgba(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:
@@ -44,6 +48,10 @@ class TestSingleImagePrediction:
         assert result.mode == "RGBA"
         assert result.size == sample_image.size
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_single_predict_map(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:
@@ -54,6 +62,10 @@ class TestSingleImagePrediction:
         assert result.mode == "L"  # Grayscale
         assert result.size == sample_image.size
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_single_predict_different_sizes(
         self,
         predictor: MVANetPredictor,
@@ -73,6 +85,10 @@ class TestSingleImagePrediction:
 class TestBatchPrediction:
     """Tests for batch image prediction."""
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_batch_predict_rgba(
         self, predictor: MVANetPredictor, sample_images_batch: list[Image.Image]
     ) -> None:
@@ -87,6 +103,10 @@ class TestBatchPrediction:
             assert result.mode == "RGBA"
             assert result.size == original.size
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_batch_predict_map(
         self, predictor: MVANetPredictor, sample_images_batch: list[Image.Image]
     ) -> None:
@@ -101,6 +121,10 @@ class TestBatchPrediction:
             assert result.mode == "L"
             assert result.size == original.size
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_batch_predict_empty(self, predictor: MVANetPredictor) -> None:
         """Test batch prediction with empty list."""
         results = predictor([], output_type="rgba")
@@ -123,6 +147,10 @@ class TestBatchPrediction:
 class TestOutputValidation:
     """Tests for output format validation."""
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_rgba_output_format(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:
@@ -141,6 +169,10 @@ class TestOutputValidation:
         assert alpha_min >= 0
         assert alpha_max <= 255
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_map_output_format(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:
@@ -157,6 +189,10 @@ class TestOutputValidation:
         assert value_min >= 0
         assert value_max <= 255
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_output_dimensions(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:
@@ -175,6 +211,10 @@ class TestOutputValidation:
 class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_non_rgb_grayscale_input(
         self, predictor: MVANetPredictor, grayscale_image: Image.Image
     ) -> None:
@@ -186,6 +226,10 @@ class TestEdgeCases:
         assert result.mode == "L"
         assert result.size == grayscale_image.size
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_non_rgb_rgba_input(
         self, predictor: MVANetPredictor, rgba_image: Image.Image
     ) -> None:
@@ -197,13 +241,21 @@ class TestEdgeCases:
         assert result.mode == "L"
         assert result.size == rgba_image.size
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_invalid_output_type(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:
         """Test that invalid output_type raises ValueError."""
         with pytest.raises(ValueError, match="Invalid output_type"):
-            predictor(sample_image, output_type="invalid")
+            predictor(sample_image, output_type="invalid")  # type: ignore[invalid-argument-type]
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_square_image(self, predictor: MVANetPredictor) -> None:
         """Test with square image."""
         square_image = Image.new("RGB", (512, 512), color="white")
@@ -211,6 +263,10 @@ class TestEdgeCases:
 
         assert result.size == (512, 512)
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_very_small_image(self, predictor: MVANetPredictor) -> None:
         """Test with very small image."""
         tiny_image = Image.new("RGB", (50, 50), color="white")
@@ -222,6 +278,10 @@ class TestEdgeCases:
 class TestInferenceMode:
     """Tests to verify inference mode and no gradient computation."""
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_no_gradients_computed(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:

@@ -1,6 +1,8 @@
 """Tests to verify batch processing produces identical results to single processing."""
 
 import numpy as np
+import pytest
+import torch
 from PIL import Image
 
 from mvanet.predictor import MVANetPredictor
@@ -43,6 +45,10 @@ def images_are_similar(
 class TestBatchCorrectness:
     """Tests to verify batch predictions match single predictions."""
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_batch_vs_single_rgba_small_batch(
         self,
         predictor: MVANetPredictor,
@@ -67,6 +73,10 @@ class TestBatchCorrectness:
                 f"Image {i}: Predictions differ significantly"
             )
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_batch_vs_single_map_small_batch(
         self,
         predictor: MVANetPredictor,
@@ -91,6 +101,10 @@ class TestBatchCorrectness:
                 f"Image {i}: Predictions differ significantly"
             )
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_batch_vs_single_large_batch(
         self,
         predictor: MVANetPredictor,
@@ -116,6 +130,10 @@ class TestBatchCorrectness:
                 f"Image {i}: Predictions differ significantly"
             )
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_batch_single_item_matches_direct_single(
         self, predictor: MVANetPredictor, sample_image: Image.Image
     ) -> None:
@@ -131,6 +149,10 @@ class TestBatchCorrectness:
         assert single_result.mode == batch_result.mode
         assert images_are_similar(single_result, batch_result, tolerance=2e-3)
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_numerical_stability_across_batch_sizes(
         self,
         predictor: MVANetPredictor,
@@ -157,6 +179,10 @@ class TestBatchCorrectness:
             single_result, batch_results_second[1], tolerance=2e-3
         ), "Image differs when processed as second item in batch"
 
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(),
+        reason="No GPUs available for testing.",
+    )
     def test_pixel_value_ranges(
         self,
         predictor: MVANetPredictor,
