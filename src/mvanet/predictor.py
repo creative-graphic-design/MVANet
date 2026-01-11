@@ -102,7 +102,7 @@ class MVANetPredictor(object):
         self, image: Union[PilImage, List[PilImage]], output_type: OutputType = "rgba"
     ) -> Union[PilImage, List[PilImage]]:
         if isinstance(image, list):
-            return self.batch_predict(image, output_type)
+            return self.batch_predict(image, output_type)  # type: ignore[arg-type]
         else:
             return self.single_predict(image, output_type)
 
@@ -121,7 +121,7 @@ class MVANetPredictor(object):
         transformed_image = transformed_image.to(self.device)
 
         mask = []
-        for tta_transform in self.tta_transforms:
+        for tta_transform in self.tta_transforms:  # type: ignore[not-iterable]
             rgb_trans = tta_transform.augment_image(transformed_image)
             model_output = self.net(rgb_trans)
             deaug_mask = tta_transform.deaugment_mask(model_output)
@@ -163,7 +163,7 @@ class MVANetPredictor(object):
         batch_tensor = torch.stack(processed_images, dim=0).to(self.device)
 
         batch_masks = []
-        for tta_transform in self.tta_transforms:
+        for tta_transform in self.tta_transforms:  # type: ignore[not-iterable]
             rgb_trans = tta_transform.augment_image(batch_tensor)
             model_output = self.net(rgb_trans)
             deaug_mask = tta_transform.deaugment_mask(model_output)
