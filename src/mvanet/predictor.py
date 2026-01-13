@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import List, Literal, Optional, Union
 
 import torch
 import ttach as tta
@@ -98,11 +98,21 @@ class MVANetPredictor(object):
         return rgba_image
 
     @torch.inference_mode()
-    def __call__(self, image: PilImage, output_type: OutputType = "rgba") -> PilImage:
+    def __call__(
+        self, image: Union[PilImage, List[PilImage]], output_type: OutputType = "rgba"
+    ) -> Union[PilImage, List[PilImage]]:
+        if isinstance(image, list):
+            return self.batch_predict(image, output_type)  # type: ignore[arg-type]
+        else:
+            return self.single_predict(image, output_type)
+
+    def single_predict(
+        self, image: PilImage, output_type: OutputType = "rgba"
+    ) -> PilImage:
         image = image.convert("RGB") if image.mode != "RGB" else image
         original_w, original_h = image.size
 
-        resized_image = image.resize([1024, 1024], Image.BILINEAR)
+        resized_image = image.resize([1024, 1024], Image.Resampling.BILINEAR)
 
         transformed_image = self.image_transform(resized_image)
         assert isinstance(transformed_image, torch.Tensor)
@@ -111,7 +121,7 @@ class MVANetPredictor(object):
         transformed_image = transformed_image.to(self.device)
 
         mask = []
-        for tta_transform in self.tta_transforms:
+        for tta_transform in self.tta_transforms:  # type: ignore[not-iterable]
             rgb_trans = tta_transform.augment_image(transformed_image)
             model_output = self.net(rgb_trans)
             deaug_mask = tta_transform.deaugment_mask(model_output)
@@ -121,7 +131,7 @@ class MVANetPredictor(object):
         predicted_mask_th = predicted_mask_th.sigmoid()
         predicted_mask_pl = self.to_pil(predicted_mask_th.squeeze(0).cpu())
         predicted_mask_pl = predicted_mask_pl.resize(
-            (original_w, original_h), Image.BILINEAR
+            (original_w, original_h), Image.Resampling.BILINEAR
         )
 
         if output_type == "rgba":
@@ -130,3 +140,50 @@ class MVANetPredictor(object):
             return predicted_mask_pl
         else:
             raise ValueError(f"Invalid output_type: {output_type}")
+
+    def batch_predict(
+        self, images: List[PilImage], output_type: OutputType = "rgba"
+    ) -> List[PilImage]:
+        batch_size = len(images)
+        if batch_size == 0:
+            return []
+
+        processed_images = []
+        original_sizes = []
+
+        for image in images:
+            image = image.convert("RGB") if image.mode != "RGB" else image
+            original_w, original_h = image.size
+            original_sizes.append((original_w, original_h))
+
+            resized_image = image.resize([1024, 1024], Image.Resampling.BILINEAR)
+            transformed_image = self.image_transform(resized_image)
+            processed_images.append(transformed_image)
+
+        batch_tensor = torch.stack(processed_images, dim=0).to(self.device)
+
+        batch_masks = []
+        for tta_transform in self.tta_transforms:  # type: ignore[not-iterable]
+            rgb_trans = tta_transform.augment_image(batch_tensor)
+            model_output = self.net(rgb_trans)
+            deaug_mask = tta_transform.deaugment_mask(model_output)
+            batch_masks.append(deaug_mask)
+
+        predicted_masks = torch.mean(torch.stack(batch_masks, dim=0), dim=0)
+        predicted_masks = predicted_masks.sigmoid()
+
+        results = []
+        for i, (original_w, original_h) in enumerate(original_sizes):
+            predicted_mask_pl = self.to_pil(predicted_masks[i].cpu())
+            predicted_mask_pl = predicted_mask_pl.resize(
+                (original_w, original_h), Image.Resampling.BILINEAR
+            )
+
+            if output_type == "rgba":
+                results.append(self.to_rgba(images[i], predicted_mask_pl))
+            elif output_type == "map":
+                results.append(predicted_mask_pl)
+            else:
+                raise ValueError(f"Invalid output_type: {output_type}")
+
+        return results

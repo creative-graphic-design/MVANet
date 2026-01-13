@@ -1,20 +1,15 @@
-.PHONY: setup
-setup:
-	pip install -U pip setuptools wheel poetry
-	poetry install
-
 .PHONY: format
 format:
-	poetry run ruff format --check --diff .
+	uv run ruff format --check --diff .
 
 .PHONY: lint
 lint:
-	poetry run ruff check --output-format=github .
+	uv run ruff check --output-format=github .
 
 .PHONY: typecheck
 typecheck:
-	poetry run mypy .
+	uv run mypy .
 
 .PHONY: test
 test:
-	poetry run pytest -vs
+	uv run pytest -vs

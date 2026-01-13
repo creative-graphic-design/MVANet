@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 from scipy import ndimage
 from scipy.ndimage import convolve
@@ -39,9 +41,9 @@ class cal_fm(object):
             rec = tp / hard_gt.sum()
             meanF = 1.3 * pre * rec / (0.3 * pre + rec)
         ########################maxF##############################
-        pred = np.uint8(pred * 255)
-        target = pred[gt > 0.5]
-        nontarget = pred[gt <= 0.5]
+        pred_uint8: np.ndarray[Any, np.dtype[np.uint8]] = (pred * 255).astype(np.uint8)
+        target = pred_uint8[gt > 0.5]
+        nontarget = pred_uint8[gt <= 0.5]
         targetHist, _ = np.histogram(target, bins=range(256))
         nontargetHist, _ = np.histogram(nontarget, bins=range(256))
         targetHist = np.cumsum(np.flip(targetHist), axis=0)
@@ -310,16 +312,16 @@ class cal_em(object):
         FM = np.array(FM, dtype=bool)
         GT = np.array(gt, dtype=bool)
         dFM = np.double(FM)
-        if sum(sum(np.double(GT))) == 0:
+        if np.sum(np.double(GT)) == 0:
             enhanced_matrix = 1.0 - dFM
-        elif sum(sum(np.double(~GT))) == 0:
+        elif np.sum(np.double(~GT)) == 0:
             enhanced_matrix = dFM
         else:
             dGT = np.double(GT)
             align_matrix = self.AlignmentTerm(dFM, dGT)
             enhanced_matrix = self.EnhancedAlignmentTerm(align_matrix)
         [w, h] = np.shape(GT)
-        score = sum(sum(enhanced_matrix)) / (w * h - 1 + 1e-8)
+        score = np.sum(enhanced_matrix) / (w * h - 1 + 1e-8)
         return score
 
     def AlignmentTerm(self, dFM, dGT):

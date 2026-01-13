@@ -13,8 +13,8 @@ def cv_random_flip(img, label):
     # flip_flag2= random.randint(0,1)
     # left right flip
     if flip_flag == 1:
-        img = img.transpose(Image.FLIP_LEFT_RIGHT)
-        label = label.transpose(Image.FLIP_LEFT_RIGHT)
+        img = img.transpose(Image.FLIP_LEFT_RIGHT)  # type: ignore[attr-defined]
+        label = label.transpose(Image.FLIP_LEFT_RIGHT)  # type: ignore[attr-defined]
     # top bottom flip
     # if flip_flag2==1:
     #     img = img.transpose(Image.FLIP_TOP_BOTTOM)
@@ -39,7 +39,7 @@ def randomCrop(image, label):
 
 
 def randomRotation(image, label):
-    mode = Image.BICUBIC
+    mode = Image.Resampling.BICUBIC
     if random.random() > 0.8:
         random_angle = np.random.randint(-15, 15)
         image = image.rotate(random_angle, mode)
@@ -160,7 +160,9 @@ class DISDataset(data.Dataset):
         if h < self.trainsize or w < self.trainsize:
             h = max(h, self.trainsize)
             w = max(w, self.trainsize)
-            return img.resize((w, h), Image.BILINEAR), gt.resize((w, h), Image.NEAREST)
+            return img.resize((w, h), Image.Resampling.BILINEAR), gt.resize(
+                (w, h), Image.Resampling.NEAREST
+            )
         else:
             return img, gt
 

@@ -45,13 +45,20 @@ def resize_as(x, y, interpolation="bilinear"):
 
 def image2patches(x):
     """b c (hg h) (wg w) -> (hg wg b) c h w"""
+    b, c, h, w = x.shape
+    if h % 2 != 0 or w % 2 != 0:
+        x = F.interpolate(
+            x, size=(h + h % 2, w + w % 2), mode="bilinear", align_corners=False
+        )
     x = rearrange(x, "b c (hg h) (wg w) -> (hg wg b) c h w", hg=2, wg=2)
     return x
 
 
 def patches2image(x):
     """(hg wg b) c h w -> b c (hg h) (wg w)"""
-    x = rearrange(x, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2)
+    patches_b, c, h, w = x.shape
+    actual_b = patches_b // 4
+    x = rearrange(x, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2, b=actual_b)
     return x
 
 
@@ -127,7 +134,7 @@ class MCLM(nn.Module):
         self.dropout2 = nn.Dropout(0.1)
         self.activation = get_activation_fn("relu")
         self.pool_ratios = pool_ratios
-        self.p_poses = []
+        self.p_poses = None
         self.g_pos = None
         self.positional_encoding = PositionEmbeddingSine(
             num_pos_feats=d_model // 2, normalize=True
@@ -135,35 +142,37 @@ class MCLM(nn.Module):
 
     def forward(self, l, g):
         """
-        l: 4,c,h,w
-        g: 1,c,h,w
+        l: batch*4,c,h,w
+        g: batch,c,h,w
         """
-        b, c, h, w = l.size()
-        # 4,c,h,w -> 1,c,2h,2w
-        concated_locs = rearrange(l, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2)
+        loc_b, c, h, w = l.size()
+        actual_batch = loc_b // 4
+        # batch*4,c,h,w -> batch,c,2h,2w
+        concated_locs = rearrange(
+            l, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2, b=actual_batch
+        )
 
         pools = []
+        p_poses_list = []
         for pool_ratio in self.pool_ratios:
             # b,c,h,w
             tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
             pool = F.adaptive_avg_pool2d(concated_locs, tgt_hw)
             pools.append(rearrange(pool, "b c h w -> (h w) b c"))
-            if self.g_pos is None:
-                pos_emb = self.positional_encoding(
-                    pool.shape[0], pool.shape[2], pool.shape[3]
-                )
-                pos_emb = rearrange(pos_emb, "b c h w -> (h w) b c")
-                self.p_poses.append(pos_emb)
+            pos_emb = self.positional_encoding(
+                pool.shape[0], pool.shape[2], pool.shape[3]
+            )
+            pos_emb = rearrange(pos_emb, "b c h w -> (h w) b c")
+            p_poses_list.append(pos_emb)
         pools = torch.cat(pools, 0)
-        if self.g_pos is None:
-            self.p_poses = torch.cat(self.p_poses, dim=0)
-            pos_emb = self.positional_encoding(g.shape[0], g.shape[2], g.shape[3])
-            self.g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
+        p_poses = torch.cat(p_poses_list, dim=0)
+        pos_emb = self.positional_encoding(g.shape[0], g.shape[2], g.shape[3])
+        g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
 
         # attention between glb (q) & multisensory concated-locs (k,v)
         g_hw_b_c = rearrange(g, "b c h w -> (h w) b c")
         g_hw_b_c = g_hw_b_c + self.dropout1(
-            self.attention[0](g_hw_b_c + self.g_pos, pools + self.p_poses, pools)[0]
+            self.attention[0](g_hw_b_c + g_pos, pools + p_poses, pools)[0]
         )
         g_hw_b_c = self.norm1(g_hw_b_c)
         g_hw_b_c = g_hw_b_c + self.dropout2(
@@ -191,8 +200,8 @@ class MCLM(nn.Module):
         )
         l_hw_b_c = self.norm2(l_hw_b_c)
 
-        l = torch.cat((l_hw_b_c, g_hw_b_c), 1)  # hw,b(5),c
-        return rearrange(l, "(h w) b c -> b c h w", h=h, w=w)  ## (5,c,h*w)
+        l = torch.cat((l_hw_b_c, g_hw_b_c), 1)  # hw,batch*(4+1),c
+        return rearrange(l, "(h w) b c -> b c h w", h=h, w=w)  ## (batch*5,c,h,w)
 
 
 class inf_MCLM(nn.Module):
@@ -219,7 +228,7 @@ class inf_MCLM(nn.Module):
         self.dropout2 = nn.Dropout(0.1)
         self.activation = get_activation_fn("relu")
         self.pool_ratios = pool_ratios
-        self.p_poses = []
+        self.p_poses = None
         self.g_pos = None
         self.positional_encoding = PositionEmbeddingSine(
             num_pos_feats=d_model // 2, normalize=True
@@ -233,29 +242,27 @@ class inf_MCLM(nn.Module):
         b, c, h, w = l.size()
         # 4,c,h,w -> 1,c,2h,2w
         concated_locs = rearrange(l, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2)
-        self.p_poses = []
         pools = []
+        p_poses_list = []
         for pool_ratio in self.pool_ratios:
             # b,c,h,w
             tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
             pool = F.adaptive_avg_pool2d(concated_locs, tgt_hw)
             pools.append(rearrange(pool, "b c h w -> (h w) b c"))
-            # if self.g_pos is None:
             pos_emb = self.positional_encoding(
                 pool.shape[0], pool.shape[2], pool.shape[3]
             )
             pos_emb = rearrange(pos_emb, "b c h w -> (h w) b c")
-            self.p_poses.append(pos_emb)
+            p_poses_list.append(pos_emb)
         pools = torch.cat(pools, 0)
-        # if self.g_pos is None:
-        self.p_poses = torch.cat(self.p_poses, dim=0)
+        p_poses = torch.cat(p_poses_list, dim=0)
         pos_emb = self.positional_encoding(g.shape[0], g.shape[2], g.shape[3])
-        self.g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
+        g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
 
         # attention between glb (q) & multisensory concated-locs (k,v)
         g_hw_b_c = rearrange(g, "b c h w -> (h w) b c")
         g_hw_b_c = g_hw_b_c + self.dropout1(
-            self.attention[0](g_hw_b_c + self.g_pos, pools + self.p_poses, pools)[0]
+            self.attention[0](g_hw_b_c + g_pos, pools + p_poses, pools)[0]
         )
         g_hw_b_c = self.norm1(g_hw_b_c)
         g_hw_b_c = g_hw_b_c + self.dropout2(
@@ -385,9 +392,13 @@ class inf_MCRM(nn.Module):
         )
 
     def forward(self, x):
-        b, c, h, w = x.size()
-        loc, glb = x.split([4, 1], dim=0)  # 4,c,h,w; 1,c,h,w
-        # b(4),c,h,w
+        total_b, c, h, w = x.size()
+        # Total batch is 5*batch_size (4 local + 1 global)
+        batch_size = total_b // 5
+
+        # Split into local (4*batch_size) and global (batch_size)
+        loc, glb = x.split([4 * batch_size, batch_size], dim=0)
+        # loc: (4*batch_size, c, h, w), glb: (batch_size, c, h, w)
         patched_glb = rearrange(glb, "b c (hg h) (wg w) -> (hg wg b) c h w", hg=2, wg=2)
 
         # generate token attention map
@@ -402,25 +413,50 @@ class inf_MCRM(nn.Module):
         for pool_ratio in self.pool_ratios:
             tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
             pool = F.adaptive_avg_pool2d(patched_glb, tgt_hw)
-            pools.append(rearrange(pool, "nl c h w -> nl c (h w)"))  # nl(4),c,hw
-        # nl(4),c,nphw -> nl(4),nphw,1,c
+            pools.append(rearrange(pool, "nl c h w -> nl c (h w)"))
+        # pools: (4*batch_size, c, nphw) -> (4*batch_size, nphw, 1, c)
         pools = rearrange(torch.cat(pools, 2), "nl c nphw -> nl nphw 1 c")
+        # Reshape to separate batch and patch dimensions: (4, batch_size, nphw, 1, c)
+        # Note: image2patches outputs in order (hg wg b) where b changes fastest
+        # So the order is: [p0_b0, p0_b1, ..., p1_b0, p1_b1, ..., p3_b0, p3_b1]
+        pools = rearrange(pools, "(p b) nphw 1 c -> p b nphw 1 c", p=4, b=batch_size)
+
+        # loc_: (4*batch_size, hw, 1, c) -> (4, batch_size, hw, 1, c)
         loc_ = rearrange(loc, "nl c h w -> nl (h w) 1 c")
+        loc_ = rearrange(loc_, "(p b) hw 1 c -> p b hw 1 c", p=4, b=batch_size)
+
+        # Apply attention for each of 4 patches (only 4 iterations, not batch_size!)
+        # Each iteration processes all batch items simultaneously
         outputs = []
-        for i, q in enumerate(loc_.unbind(dim=0)):  # traverse all local patches
-            # np*hw,1,c
-            v = pools[i]
+        for i in range(4):  # Only 4 iterations regardless of batch_size!
+            # Extract patch i across all batch items: (batch_size, hw, 1, c)
+            q = loc_[i, :, :, :, :]  # (b, hw, 1, c)
+            v = pools[i, :, :, :, :]  # (b, nphw, 1, c)
             k = v
-            outputs.append(self.attention[i](q, k, v)[0])
-        outputs = torch.cat(outputs, 1)
-        src = loc.view(4, c, -1).permute(2, 0, 1) + self.dropout1(outputs)
+
+            # Reshape for MultiheadAttention: (seq, batch, dim)
+            q = rearrange(q, "b hw 1 c -> hw b c")
+            k = rearrange(k, "b nphw 1 c -> nphw b c")
+            v = rearrange(v, "b nphw 1 c -> nphw b c")
+
+            # Apply attention (processes all batch_size items in parallel)
+            attn_out = self.attention[i](q, k, v)[0]  # (hw, b, c)
+            outputs.append(attn_out)
+
+        # Concatenate outputs: list of 4 x (hw, b, c) -> (hw, p*b, c)
+        # Interleave to match (p b) order: [p0_b0, p0_b1, ..., p1_b0, p1_b1, ...]
+        outputs = torch.stack(outputs, dim=2)  # (hw, b, 4, c)
+        outputs = rearrange(outputs, "hw b p c -> hw (p b) c")  # (hw, 4*b, c)
+
+        # Continue with existing operations using batch_size
+        src = loc.view(4 * batch_size, c, -1).permute(2, 0, 1) + self.dropout1(outputs)
         src = self.norm1(src)
         src = src + self.dropout2(
             self.linear4(self.dropout(self.activation(self.linear3(src)).clone()))
         )
         src = self.norm2(src)
 
-        src = src.permute(1, 2, 0).reshape(4, c, h, w)  # freshed loc
+        src = src.permute(1, 2, 0).reshape(4 * batch_size, c, h, w)  # freshed loc
         glb = glb + F.interpolate(
             patches2image(src), size=glb.shape[-2:], mode="nearest"
         )  # freshed glb
@@ -475,18 +511,19 @@ class MVANet(nn.Module):
                 m.inplace = True
 
     def forward(self, x):
+        batch_size = x.shape[0]
         shallow = self.shallow(x)
         glb = rescale_to(x, scale_factor=0.5, interpolation="bilinear")
         loc = image2patches(x)
         input = torch.cat((loc, glb), dim=0)
         feature = self.backbone(input)
-        e5 = self.output5(feature[4])  # (5,128,16,16)
-        e4 = self.output4(feature[3])  # (5,128,32,32)
-        e3 = self.output3(feature[2])  # (5,128,64,64)
-        e2 = self.output2(feature[1])  # (5,128,128,128)
-        e1 = self.output1(feature[0])  # (5,128,128,128)
-        loc_e5, glb_e5 = e5.split([4, 1], dim=0)
-        e5 = self.multifieldcrossatt(loc_e5, glb_e5)  # (4,128,16,16)
+        e5 = self.output5(feature[4])  # (batch*5,128,16,16)
+        e4 = self.output4(feature[3])  # (batch*5,128,32,32)
+        e3 = self.output3(feature[2])  # (batch*5,128,64,64)
+        e2 = self.output2(feature[1])  # (batch*5,128,128,128)
+        e1 = self.output1(feature[0])  # (batch*5,128,128,128)
+        loc_e5, glb_e5 = e5.split([batch_size * 4, batch_size], dim=0)
+        e5 = self.multifieldcrossatt(loc_e5, glb_e5)  # (batch*5,128,16,16)
 
         e4, tokenattmap4 = self.dec_blk4(e4 + resize_as(e5, e4))
         e4 = self.conv4(e4)
@@ -496,12 +533,12 @@ class MVANet(nn.Module):
         e2 = self.conv2(e2)
         e1, tokenattmap1 = self.dec_blk1(e1 + resize_as(e2, e1))
         e1 = self.conv1(e1)
-        loc_e1, glb_e1 = e1.split([4, 1], dim=0)
-        output1_cat = patches2image(loc_e1)  # (1,128,256,256)
+        loc_e1, glb_e1 = e1.split([batch_size * 4, batch_size], dim=0)
+        output1_cat = patches2image(loc_e1)  # (batch,128,256,256)
         # add glb feat in
         output1_cat = output1_cat + resize_as(glb_e1, output1_cat)
         # merge
-        final_output = self.insmask_head(output1_cat)  # (1,128,256,256)
+        final_output = self.insmask_head(output1_cat)  # (batch,128,256,256)
         # shallow feature merge
         final_output = final_output + resize_as(shallow, final_output)
         final_output = self.upsample1(rescale_to(final_output))
@@ -591,6 +628,7 @@ class inf_MVANet(nn.Module):
                 m.inplace = True
 
     def forward(self, x):
+        batch_size = x.shape[0]
         shallow = self.shallow(x)
         glb = rescale_to(x, scale_factor=0.5, interpolation="bilinear")
         loc = image2patches(x)
@@ -601,14 +639,14 @@ class inf_MVANet(nn.Module):
         e3 = self.output3(feature[2])
         e2 = self.output2(feature[1])
         e1 = self.output1(feature[0])
-        loc_e5, glb_e5 = e5.split([4, 1], dim=0)
+        loc_e5, glb_e5 = e5.split([batch_size * 4, batch_size], dim=0)
         e5_cat = self.multifieldcrossatt(loc_e5, glb_e5)
 
         e4 = self.conv4(self.dec_blk4(e4 + resize_as(e5_cat, e4)))
         e3 = self.conv3(self.dec_blk3(e3 + resize_as(e4, e3)))
         e2 = self.conv2(self.dec_blk2(e2 + resize_as(e3, e2)))
         e1 = self.conv1(self.dec_blk1(e1 + resize_as(e2, e1)))
-        loc_e1, glb_e1 = e1.split([4, 1], dim=0)
+        loc_e1, glb_e1 = e1.split([batch_size * 4, batch_size], dim=0)
         # after decoder, concat loc features to a whole one, and merge
         output1_cat = patches2image(loc_e1)
         # add glb feat in
