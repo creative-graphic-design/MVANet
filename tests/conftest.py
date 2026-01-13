@@ -4,7 +4,7 @@ import pytest
 import torch
 from PIL import Image, ImageDraw
 
-from mvanet.predictor import MVANetPredictor
+from mvanet_original import MVANetPredictor
 
 
 @pytest.fixture(scope="session")

@@ -1,137 +1,17 @@
-"""PyTorch MVANet model for semantic segmentation."""
-
-import math
-from typing import Optional, Tuple, Union
-
+# --------------------------------------------------------
+# Swin Transformer
+# Copyright (c) 2021 Microsoft
+# Licensed under The MIT License [see LICENSE for details]
+# Written by Ze Liu, Yutong Lin, Yixuan Wei
+# --------------------------------------------------------
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
-from einops import rearrange
 from huggingface_hub import hf_hub_download
-from timm.layers import DropPath, to_2tuple, trunc_normal_
 from timm.models import load_checkpoint
-from transformers import PreTrainedModel
-from transformers.modeling_outputs import SemanticSegmenterOutput
-
-from mvanet.transformers.configuration_mvanet import MVANetConfig
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
-
-
-def get_activation_fn(activation):
-    """Return an activation function given a string"""
-    if activation == "relu":
-        return F.relu
-    if activation == "gelu":
-        return F.gelu
-    if activation == "glu":
-        return F.glu
-    raise RuntimeError(f"activation should be relu/gelu, not {activation}.")
-
-
-def make_cbr(in_dim, out_dim):
-    return nn.Sequential(
-        nn.Conv2d(in_dim, out_dim, kernel_size=3, padding=1),
-        nn.BatchNorm2d(out_dim),
-        nn.PReLU(),
-    )
-
-
-def make_cbg(in_dim, out_dim):
-    return nn.Sequential(
-        nn.Conv2d(in_dim, out_dim, kernel_size=3, padding=1),
-        nn.BatchNorm2d(out_dim),
-        nn.GELU(),
-    )
-
-
-def rescale_to(x, scale_factor: float = 2, interpolation="nearest"):
-    return F.interpolate(x, scale_factor=scale_factor, mode=interpolation)
-
-
-def resize_as(x, y, interpolation="bilinear"):
-    return F.interpolate(x, size=y.shape[-2:], mode=interpolation)
-
-
-def image2patches(x):
-    """b c (hg h) (wg w) -> (hg wg b) c h w"""
-    b, c, h, w = x.shape
-    if h % 2 != 0 or w % 2 != 0:
-        x = F.interpolate(
-            x, size=(h + h % 2, w + w % 2), mode="bilinear", align_corners=False
-        )
-    x = rearrange(x, "b c (hg h) (wg w) -> (hg wg b) c h w", hg=2, wg=2)
-    return x
-
-
-def patches2image(x):
-    """(hg wg b) c h w -> b c (hg h) (wg w)"""
-    patches_b, c, h, w = x.shape
-    actual_b = patches_b // 4
-    x = rearrange(x, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2, b=actual_b)
-    return x
-
-
-# ============================================================================
-# Position Embedding
-# ============================================================================
-
-
-class PositionEmbeddingSine(nn.Module):
-    def __init__(
-        self, num_pos_feats=64, temperature=10000, normalize=False, scale=None
-    ):
-        super().__init__()
-        self.num_pos_feats = num_pos_feats
-        self.temperature = temperature
-        self.normalize = normalize
-        if scale is not None and normalize is False:
-            raise ValueError("normalize should be True if scale is passed")
-        if scale is None:
-            scale = 2 * math.pi
-        self.scale = scale
-        self.dim_t = torch.arange(
-            0,
-            self.num_pos_feats,
-            dtype=torch.float32,
-            device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-        )
-
-    def __call__(self, b, h, w):
-        mask = torch.zeros([b, h, w], dtype=torch.bool, device=self.dim_t.device)
-        assert mask is not None
-        not_mask = ~mask
-        y_embed = not_mask.cumsum(dim=1, dtype=torch.float32)
-        x_embed = not_mask.cumsum(dim=2, dtype=torch.float32)
-        if self.normalize:
-            eps = 1e-6
-            y_embed = ((y_embed - 0.5) / (y_embed[:, -1:, :] + eps) * self.scale).to(
-                mask.device
-            )
-            x_embed = ((x_embed - 0.5) / (x_embed[:, :, -1:] + eps) * self.scale).to(
-                mask.device
-            )
-
-        dim_t = self.temperature ** (2 * (self.dim_t // 2) / self.num_pos_feats)
-
-        pos_x = x_embed[:, :, :, None] / dim_t
-        pos_y = y_embed[:, :, :, None] / dim_t
-        pos_x = torch.stack(
-            (pos_x[:, :, :, 0::2].sin(), pos_x[:, :, :, 1::2].cos()), dim=4
-        ).flatten(3)
-        pos_y = torch.stack(
-            (pos_y[:, :, :, 0::2].sin(), pos_y[:, :, :, 1::2].cos()), dim=4
-        ).flatten(3)
-        return torch.cat((pos_y, pos_x), dim=3).permute(0, 3, 1, 2)
-
-
-# ============================================================================
-# Swin Transformer Components
-# ============================================================================
+from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 
 class Mlp(nn.Module):
@@ -237,9 +117,7 @@ class WindowAttention(nn.Module):
         # get pair-wise relative position index for each token inside the window
         coords_h = torch.arange(self.window_size[0])
         coords_w = torch.arange(self.window_size[1])
-        coords = torch.stack(
-            torch.meshgrid([coords_h, coords_w], indexing="ij")
-        )  # 2, Wh, Ww
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
         coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
         relative_coords = (
             coords_flatten[:, :, None] - coords_flatten[:, None, :]
@@ -862,6 +740,38 @@ class SwinTransformer(nn.Module):
         self._freeze_stages()
 
 
+def SwinT(pretrained=True):
+    model = SwinTransformer(
+        embed_dim=96, depths=[2, 2, 6, 2], num_heads=[3, 6, 12, 24], window_size=7
+    )
+    if pretrained is True:
+        model.load_state_dict(
+            torch.load(
+                "data/backbone_ckpt/swin_tiny_patch4_window7_224.pth",
+                map_location="cpu",
+            )["model"],
+            strict=False,
+        )
+
+    return model
+
+
+def SwinS(pretrained=True):
+    model = SwinTransformer(
+        embed_dim=96, depths=[2, 2, 18, 2], num_heads=[3, 6, 12, 24], window_size=7
+    )
+    if pretrained is True:
+        model.load_state_dict(
+            torch.load(
+                "data/backbone_ckpt/swin_small_patch4_window7_224.pth",
+                map_location="cpu",
+            )["model"],
+            strict=False,
+        )
+
+    return model
+
+
 def SwinB(pretrained=True):
     model = SwinTransformer(
         embed_dim=128, depths=[2, 2, 18, 2], num_heads=[4, 8, 16, 32], window_size=12
@@ -877,464 +787,17 @@ def SwinB(pretrained=True):
     return model
 
 
-# ============================================================================
-# Multi-field Cross Localization Module (MCLM)
-# ============================================================================
-
-
-class inf_MCLM(nn.Module):
-    def __init__(self, d_model, num_heads, pool_ratios=[1, 4, 8]):
-        super(inf_MCLM, self).__init__()
-        self.attention = nn.ModuleList(
-            [
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-            ]
+def SwinL(pretrained=True):
+    model = SwinTransformer(
+        embed_dim=192, depths=[2, 2, 18, 2], num_heads=[6, 12, 24, 48], window_size=12
+    )
+    if pretrained is True:
+        model.load_state_dict(
+            torch.load(
+                "data/backbone_ckpt/swin_large_patch4_window12_384_22kto1k.pth",
+                map_location="cpu",
+            )["model"],
+            strict=False,
         )
 
-        self.linear1 = nn.Linear(d_model, d_model * 2)
-        self.linear2 = nn.Linear(d_model * 2, d_model)
-        self.linear3 = nn.Linear(d_model, d_model * 2)
-        self.linear4 = nn.Linear(d_model * 2, d_model)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.dropout = nn.Dropout(0.1)
-        self.dropout1 = nn.Dropout(0.1)
-        self.dropout2 = nn.Dropout(0.1)
-        self.activation = get_activation_fn("relu")
-        self.pool_ratios = pool_ratios
-        self.p_poses = None
-        self.g_pos = None
-        self.positional_encoding = PositionEmbeddingSine(
-            num_pos_feats=d_model // 2, normalize=True
-        )
-
-    def forward(self, l, g):
-        """
-        l: 4,c,h,w
-        g: 1,c,h,w
-        """
-        b, c, h, w = l.size()
-        # 4,c,h,w -> 1,c,2h,2w
-        concated_locs = rearrange(l, "(hg wg b) c h w -> b c (hg h) (wg w)", hg=2, wg=2)
-        pools = []
-        p_poses_list = []
-        for pool_ratio in self.pool_ratios:
-            # b,c,h,w
-            tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
-            pool = F.adaptive_avg_pool2d(concated_locs, tgt_hw)
-            pools.append(rearrange(pool, "b c h w -> (h w) b c"))
-            pos_emb = self.positional_encoding(
-                pool.shape[0], pool.shape[2], pool.shape[3]
-            )
-            pos_emb = rearrange(pos_emb, "b c h w -> (h w) b c")
-            p_poses_list.append(pos_emb)
-        pools = torch.cat(pools, 0)
-        p_poses = torch.cat(p_poses_list, dim=0)
-        pos_emb = self.positional_encoding(g.shape[0], g.shape[2], g.shape[3])
-        g_pos = rearrange(pos_emb, "b c h w -> (h w) b c")
-
-        # attention between glb (q) & multisensory concated-locs (k,v)
-        g_hw_b_c = rearrange(g, "b c h w -> (h w) b c")
-        g_hw_b_c = g_hw_b_c + self.dropout1(
-            self.attention[0](g_hw_b_c + g_pos, pools + p_poses, pools)[0]
-        )
-        g_hw_b_c = self.norm1(g_hw_b_c)
-        g_hw_b_c = g_hw_b_c + self.dropout2(
-            self.linear2(self.dropout(self.activation(self.linear1(g_hw_b_c)).clone()))
-        )
-        g_hw_b_c = self.norm2(g_hw_b_c)
-
-        # attention between origin locs (q) & freashed glb (k,v)
-        l_hw_b_c = rearrange(l, "b c h w -> (h w) b c")
-        _g_hw_b_c = rearrange(g_hw_b_c, "(h w) b c -> h w b c", h=h, w=w)
-        _g_hw_b_c = rearrange(
-            _g_hw_b_c, "(ng h) (nw w) b c -> (h w) (ng nw b) c", ng=2, nw=2
-        )
-        outputs_re = []
-        for i, (_l, _g) in enumerate(
-            zip(l_hw_b_c.chunk(4, dim=1), _g_hw_b_c.chunk(4, dim=1))
-        ):
-            outputs_re.append(self.attention[i + 1](_l, _g, _g)[0])  # (h w) 1 c
-        outputs_re = torch.cat(outputs_re, 1)  # (h w) 4 c
-
-        l_hw_b_c = l_hw_b_c + self.dropout1(outputs_re)
-        l_hw_b_c = self.norm1(l_hw_b_c)
-        l_hw_b_c = l_hw_b_c + self.dropout2(
-            self.linear4(self.dropout(self.activation(self.linear3(l_hw_b_c)).clone()))
-        )
-        l_hw_b_c = self.norm2(l_hw_b_c)
-
-        l = torch.cat((l_hw_b_c, g_hw_b_c), 1)  # hw,b(5),c
-        return rearrange(l, "(h w) b c -> b c h w", h=h, w=w)  ## (5,c,h*w)
-
-
-# ============================================================================
-# Multi-crop Refinement Module (MCRM)
-# ============================================================================
-
-
-class inf_MCRM(nn.Module):
-    def __init__(self, d_model, num_heads, pool_ratios=[4, 8, 16], h=None):
-        super(inf_MCRM, self).__init__()
-        self.attention = nn.ModuleList(
-            [
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-                nn.MultiheadAttention(d_model, num_heads, dropout=0.1),
-            ]
-        )
-
-        self.linear3 = nn.Linear(d_model, d_model * 2)
-        self.linear4 = nn.Linear(d_model * 2, d_model)
-        self.norm1 = nn.LayerNorm(d_model)
-        self.norm2 = nn.LayerNorm(d_model)
-        self.dropout = nn.Dropout(0.1)
-        self.dropout1 = nn.Dropout(0.1)
-        self.dropout2 = nn.Dropout(0.1)
-        self.sigmoid = nn.Sigmoid()
-        self.activation = get_activation_fn("relu")
-        self.sal_conv = nn.Conv2d(d_model, 1, 1)
-        self.pool_ratios = pool_ratios
-        self.positional_encoding = PositionEmbeddingSine(
-            num_pos_feats=d_model // 2, normalize=True
-        )
-
-    def forward(self, x):
-        total_b, c, h, w = x.size()
-        # Total batch is 5*batch_size (4 local + 1 global)
-        batch_size = total_b // 5
-
-        # Split into local (4*batch_size) and global (batch_size)
-        loc, glb = x.split([4 * batch_size, batch_size], dim=0)
-        # loc: (4*batch_size, c, h, w), glb: (batch_size, c, h, w)
-        patched_glb = rearrange(glb, "b c (hg h) (wg w) -> (hg wg b) c h w", hg=2, wg=2)
-
-        # generate token attention map
-        token_attention_map = self.sigmoid(self.sal_conv(glb))
-        token_attention_map = F.interpolate(
-            token_attention_map, size=patches2image(loc).shape[-2:], mode="nearest"
-        )
-        loc = loc * rearrange(
-            token_attention_map, "b c (hg h) (wg w) -> (hg wg b) c h w", hg=2, wg=2
-        )
-        pools = []
-        for pool_ratio in self.pool_ratios:
-            tgt_hw = (round(h / pool_ratio), round(w / pool_ratio))
-            pool = F.adaptive_avg_pool2d(patched_glb, tgt_hw)
-            pools.append(rearrange(pool, "nl c h w -> nl c (h w)"))
-        # pools: (4*batch_size, c, nphw) -> (4*batch_size, nphw, 1, c)
-        pools = rearrange(torch.cat(pools, 2), "nl c nphw -> nl nphw 1 c")
-        # Reshape to separate batch and patch dimensions: (4, batch_size, nphw, 1, c)
-        # Note: image2patches outputs in order (hg wg b) where b changes fastest
-        # So the order is: [p0_b0, p0_b1, ..., p1_b0, p1_b1, ..., p3_b0, p3_b1]
-        pools = rearrange(pools, "(p b) nphw 1 c -> p b nphw 1 c", p=4, b=batch_size)
-
-        # loc_: (4*batch_size, hw, 1, c) -> (4, batch_size, hw, 1, c)
-        loc_ = rearrange(loc, "nl c h w -> nl (h w) 1 c")
-        loc_ = rearrange(loc_, "(p b) hw 1 c -> p b hw 1 c", p=4, b=batch_size)
-
-        # Apply attention for each of 4 patches (only 4 iterations, not batch_size!)
-        # Each iteration processes all batch items simultaneously
-        outputs = []
-        for i in range(4):  # Only 4 iterations regardless of batch_size!
-            # Extract patch i across all batch items: (batch_size, hw, 1, c)
-            q = loc_[i, :, :, :, :]  # (b, hw, 1, c)
-            v = pools[i, :, :, :, :]  # (b, nphw, 1, c)
-            k = v
-
-            # Reshape for MultiheadAttention: (seq, batch, dim)
-            q = rearrange(q, "b hw 1 c -> hw b c")
-            k = rearrange(k, "b nphw 1 c -> nphw b c")
-            v = rearrange(v, "b nphw 1 c -> nphw b c")
-
-            # Apply attention (processes all batch_size items in parallel)
-            attn_out = self.attention[i](q, k, v)[0]  # (hw, b, c)
-            outputs.append(attn_out)
-
-        # Concatenate outputs: list of 4 x (hw, b, c) -> (hw, p*b, c)
-        # Interleave to match (p b) order: [p0_b0, p0_b1, ..., p1_b0, p1_b1, ...]
-        outputs = torch.stack(outputs, dim=2)  # (hw, b, 4, c)
-        outputs = rearrange(outputs, "hw b p c -> hw (p b) c")  # (hw, 4*b, c)
-
-        # Continue with existing operations using batch_size
-        src = loc.view(4 * batch_size, c, -1).permute(2, 0, 1) + self.dropout1(outputs)
-        src = self.norm1(src)
-        src = src + self.dropout2(
-            self.linear4(self.dropout(self.activation(self.linear3(src)).clone()))
-        )
-        src = self.norm2(src)
-
-        src = src.permute(1, 2, 0).reshape(4 * batch_size, c, h, w)  # freshed loc
-        glb = glb + F.interpolate(
-            patches2image(src), size=glb.shape[-2:], mode="nearest"
-        )  # freshed glb
-        return torch.cat((src, glb), 0)
-
-
-# ============================================================================
-# MVANet Model for Image Segmentation
-# ============================================================================
-
-
-class MVANetForImageSegmentation(PreTrainedModel):
-    """
-    MVANet Model for image segmentation.
-
-    This model is a direct reimplementation of inf_MVANet with transformers-compatible
-    interface for semantic segmentation tasks.
-
-    Args:
-        config (:class:`~mvanet.transformers.MVANetConfig`): Model configuration class with all the parameters of the model.
-            Initializing with a config file does not load the weights associated with the model, only the configuration.
-
-    Example::\
-
-        >>> from transformers import AutoModel, AutoImageProcessor
-        >>> from PIL import Image
-
-        >>> # Load model and processor
-        >>> model = AutoModel.from_pretrained("creative-graphic-design/mvanet")
-        >>> processor = AutoImageProcessor.from_pretrained("creative-graphic-design/mvanet")
-
-        >>> # Load image
-        >>> image = Image.open("image.png")
-
-        >>> # Preprocess
-        >>> inputs = processor(image, return_tensors="pt")
-
-        >>> # Forward pass
-        >>> outputs = model(**inputs)
-
-        >>> # Post-process
-        >>> masks = processor.post_process_semantic_segmentation(
-        ...     outputs, target_sizes=[image.size[::-1]]
-        ... )
-    """
-
-    config_class = MVANetConfig
-    base_model_prefix = "mvanet"
-    main_input_name = "pixel_values"
-    supports_gradient_checkpointing = False
-    _no_split_modules = []
-
-    def __init__(self, config: MVANetConfig):
-        super().__init__(config)
-        self.config = config
-
-        emb_dim = config.embedding_dim
-
-        # Backbone: Swin Transformer
-        self.backbone = SwinB(pretrained=config.backbone_pretrained)
-
-        # Feature projection layers - use config values
-        out_channels = config.backbone_out_channels
-        self.output5 = make_cbr(out_channels[4], emb_dim)  # 1024 -> 128
-        self.output4 = make_cbr(out_channels[3], emb_dim)  # 512 -> 128
-        self.output3 = make_cbr(out_channels[2], emb_dim)  # 256 -> 128
-        self.output2 = make_cbr(out_channels[1], emb_dim)  # 128 -> 128
-        self.output1 = make_cbr(out_channels[0], emb_dim)  # 128 -> 128
-
-        # Multi-field Cross Localization Module
-        self.multifieldcrossatt = inf_MCLM(
-            emb_dim, config.mclm_num_heads, config.mclm_pool_ratios
-        )
-
-        # Convolution blocks for decoder
-        self.conv1 = make_cbr(emb_dim, emb_dim)
-        self.conv2 = make_cbr(emb_dim, emb_dim)
-        self.conv3 = make_cbr(emb_dim, emb_dim)
-        self.conv4 = make_cbr(emb_dim, emb_dim)
-
-        # Multi-crop Refinement Module decoder blocks
-        self.dec_blk1 = inf_MCRM(
-            emb_dim, config.mcrm_num_heads, config.mcrm_pool_ratios
-        )
-        self.dec_blk2 = inf_MCRM(
-            emb_dim, config.mcrm_num_heads, config.mcrm_pool_ratios
-        )
-        self.dec_blk3 = inf_MCRM(
-            emb_dim, config.mcrm_num_heads, config.mcrm_pool_ratios
-        )
-        self.dec_blk4 = inf_MCRM(
-            emb_dim, config.mcrm_num_heads, config.mcrm_pool_ratios
-        )
-
-        # Instance mask head - use config value
-        hidden_dim = config.insmask_hidden_dim
-        self.insmask_head = nn.Sequential(
-            nn.Conv2d(emb_dim, hidden_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(hidden_dim),
-            nn.PReLU(),
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(hidden_dim),
-            nn.PReLU(),
-            nn.Conv2d(hidden_dim, emb_dim, kernel_size=3, padding=1),
-        )
-
-        # Shallow feature extraction - use config value
-        self.shallow = nn.Sequential(
-            nn.Conv2d(config.num_channels, emb_dim, kernel_size=3, padding=1)
-        )
-
-        # Upsampling layers
-        self.upsample1 = make_cbg(emb_dim, emb_dim)
-        self.upsample2 = make_cbg(emb_dim, emb_dim)
-
-        # Final output layer - use config value
-        self.output = nn.Sequential(
-            nn.Conv2d(emb_dim, config.num_labels, kernel_size=3, padding=1)
-        )
-
-        # Set inplace operations for ReLU and Dropout
-        for m in self.modules():
-            if isinstance(m, nn.ReLU) or isinstance(m, nn.Dropout):
-                m.inplace = True
-
-        # Initialize weights and apply final processing
-        self.post_init()
-
-    def forward(
-        self,
-        pixel_values: torch.FloatTensor,
-        labels: Optional[torch.LongTensor] = None,
-        output_hidden_states: Optional[bool] = None,
-        return_dict: Optional[bool] = None,
-        **kwargs,
-    ) -> Union[Tuple, SemanticSegmenterOutput]:
-        """
-        Forward pass of the model.
-
-        Args:
-            pixel_values (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, num_channels, height, width)`):
-                Pixel values. Pixel values can be obtained using :class:`~mvanet.transformers.MVANetImageProcessor`.
-                See :meth:`~mvanet.transformers.MVANetImageProcessor.preprocess` for details.
-            labels (:obj:`torch.LongTensor` of shape :obj:`(batch_size, height, width)`, `optional`):
-                Ground truth semantic segmentation maps for computing the loss.
-            output_hidden_states (:obj:`bool`, `optional`):
-                Whether or not to return the hidden states of all layers. Currently not supported.
-            return_dict (:obj:`bool`, `optional`):
-                Whether or not to return a :class:`~transformers.modeling_outputs.SemanticSegmenterOutput` instead of
-                a plain tuple.
-
-        Returns:
-            :class:`~transformers.modeling_outputs.SemanticSegmenterOutput` or :obj:`tuple`:
-                A :class:`~transformers.modeling_outputs.SemanticSegmenterOutput` (if ``return_dict=True`` is passed or
-                when ``config.use_return_dict=True``) or a tuple of :obj:`torch.FloatTensor`.
-
-        Example::\
-
-            >>> from mvanet.transformers import MVANetForImageSegmentation, MVANetImageProcessor
-            >>> import torch
-            >>> from PIL import Image
-
-            >>> processor = MVANetImageProcessor()
-            >>> model = MVANetForImageSegmentation.from_pretrained("creative-graphic-design/mvanet")
-
-            >>> image = Image.open("image.png")
-            >>> inputs = processor(image, return_tensors="pt")
-            >>> outputs = model(**inputs)
-            >>> logits = outputs.logits  # (batch_size, num_labels, height, width)
-        """
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
-
-        batch_size = pixel_values.shape[0]
-
-        # Extract shallow features
-        shallow = self.shallow(pixel_values)
-
-        # Create multi-view input: 4 local patches + 1 global view
-        # Use config value for global view scale
-        glb = rescale_to(
-            pixel_values,
-            scale_factor=self.config.global_view_scale,
-            interpolation="bilinear",
-        )
-        loc = image2patches(pixel_values)
-        input_views = torch.cat((loc, glb), dim=0)
-
-        # Extract features through backbone
-        feature = self.backbone(input_views)
-
-        # Project features to embedding dimension
-        e5 = self.output5(feature[4])  # (batch*5, 128, 16, 16)
-        e4 = self.output4(feature[3])  # (batch*5, 128, 32, 32)
-        e3 = self.output3(feature[2])  # (batch*5, 128, 64, 64)
-        e2 = self.output2(feature[1])  # (batch*5, 128, 128, 128)
-        e1 = self.output1(feature[0])  # (batch*5, 128, 128, 128)
-
-        # Split local and global features at deepest level
-        # Use config value for number of patches
-        loc_e5, glb_e5 = e5.split(
-            [batch_size * self.config.num_patches, batch_size], dim=0
-        )
-
-        # Apply multi-field cross attention
-        e5_cat = self.multifieldcrossatt(loc_e5, glb_e5)  # (batch*5, 128, 16, 16)
-
-        # Decode through MCRM blocks with skip connections
-        e4 = self.conv4(self.dec_blk4(e4 + resize_as(e5_cat, e4)))
-        e3 = self.conv3(self.dec_blk3(e3 + resize_as(e4, e3)))
-        e2 = self.conv2(self.dec_blk2(e2 + resize_as(e3, e2)))
-        e1 = self.conv1(self.dec_blk1(e1 + resize_as(e2, e1)))
-
-        # Split local and global features
-        # Use config value for number of patches
-        loc_e1, glb_e1 = e1.split(
-            [batch_size * self.config.num_patches, batch_size], dim=0
-        )
-
-        # Merge local patches back to image
-        output1_cat = patches2image(loc_e1)
-
-        # Add global features
-        output1_cat = output1_cat + resize_as(glb_e1, output1_cat)
-
-        # Apply instance mask head
-        final_output = self.insmask_head(output1_cat)
-
-        # Merge shallow features
-        final_output = final_output + resize_as(shallow, final_output)
-        final_output = self.upsample1(rescale_to(final_output))
-        final_output = rescale_to(final_output + resize_as(shallow, final_output))
-        final_output = self.upsample2(final_output)
-
-        # Final output (logits before sigmoid)
-        logits = self.output(final_output)
-
-        loss = None
-        if labels is not None:
-            # Compute binary cross-entropy loss with logits
-            # labels should be float with values in [0, 1]
-            loss_fct = nn.BCEWithLogitsLoss()
-            # Ensure labels have the same shape as logits
-            if labels.dim() == 3:
-                # (B, H, W) -> (B, 1, H, W)
-                labels = labels.unsqueeze(1)
-            loss = loss_fct(logits, labels.float())
-
-        if not return_dict:
-            output = (logits,)
-            return ((loss,) + output) if loss is not None else output
-
-        return SemanticSegmenterOutput(
-            loss=loss,
-            logits=logits,
-            hidden_states=None,
-            attentions=None,
-        )
-
-    def _init_weights(self, module):
-        """
-        Initialize weights.
-
-        The backbone (SwinB) and other modules handle their own weight initialization,
-        so we don't need to do anything here.
-        """
-        pass
+    return model
