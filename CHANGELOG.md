@@ -1,5 +1,7 @@
 # Changelog
 
+## [v0.1.0](https://github.com/creative-graphic-design/MVANet/compare/v0.3.0...v0.1.0) - 2026-01-13
+
 ## [v0.3.0](https://github.com/creative-graphic-design/MVANet/compare/v0.2.1...v0.3.0) - 2025-03-18
 - Remove `mmdet`-related dependencies by @shunk031 in https://github.com/creative-graphic-design/MVANet/pull/12
 
