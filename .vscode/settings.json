@@ -1,0 +1,11 @@
+{
+    "workbench.colorCustomizations": {
+        "editorCursor.foreground": "#FFFF00",
+        "activityBar.background": "#003434",
+        "titleBar.activeBackground": "#004849",
+        "titleBar.activeForeground": "#E4FFFF"
+    },
+    "cSpell.words": [
+        "mcrm"
+    ]
+}

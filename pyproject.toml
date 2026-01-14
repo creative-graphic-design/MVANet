@@ -12,6 +12,7 @@ dependencies = [
     "timm>=1.0.22",
     "torch>=2.0.0",
     "torchvision>=0.15.0",
+    "transformers[torch,torch-vision]>=4.57.3",
     "ttach>=0.0.3",
 ]
 
@@ -21,6 +22,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = ["mypy>=1.0.0", "pytest>=6.0.0", "ruff>=0.1.5", "scipy-stubs>=1.17.0.0"]
+original = ["mvanet-original"]
+
+[tool.uv.sources]
+mvanet-original = { path = "./mvanet_original" }
 
 [tool.ruff.lint]
 ignore = [

@@ -1,0 +1,16 @@
+[project]
+name = "mvanet-original"
+version = "0.1.0"
+description = "Original MVANet implementation (legacy)"
+requires-python = ">=3.11"
+dependencies = [
+    "einops>=0.8.1",
+    "timm>=1.0.22",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "ttach>=0.0.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

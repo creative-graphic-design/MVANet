@@ -283,10 +283,8 @@ class WindowAttention(nn.Module):
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
 
-        relative_position_index = self.relative_position_index
-        assert isinstance(relative_position_index, torch.Tensor)
         relative_position_bias = self.relative_position_bias_table[
-            relative_position_index.view(-1)
+            self.relative_position_index.view(-1)
         ].view(
             self.window_size[0] * self.window_size[1],
             self.window_size[0] * self.window_size[1],
@@ -379,8 +377,8 @@ class SwinTransformerBlock(nn.Module):
             drop=drop,
         )
 
-        self.H: int | None = None
-        self.W: int | None = None
+        self.H = None
+        self.W = None
 
     def forward(self, x, mask_matrix):
         """Forward function.
@@ -392,7 +390,6 @@ class SwinTransformerBlock(nn.Module):
         """
         B, L, C = x.shape
         H, W = self.H, self.W
-        assert H is not None and W is not None, "H and W must be set before forward"
         assert L == H * W, "input feature has wrong size"
 
         shortcut = x
